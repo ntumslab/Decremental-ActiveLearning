@@ -1,0 +1,67 @@
+1. a1a
+    Source: UCI / Adult
+    Preprocessing: The original Adult data set has 14 features, among which six are continuous and eight are categorical. In this data set, continuous features are discretized into quantiles, and each quantile is represented by a binary feature. Also, a categorical feature with m categories is converted to m binary features. Details on how each feature is converted can be found in the beginning of each file from this page. [JP98a]
+    # of classes: 2
+    # of data: 1,605 / 30,956 (testing)
+    # of features: 123 / 123 (testing) 
+	
+2. gisette
+    Source: NIPS 2003 Feature Selection Challenge [IG05a]
+    Preprocessing: The data set is also available at UCI. Because the labels of testing set are not available, here we use the validation set (gisette_valid.data and gisette_valid.labels) as the testing set. The training data (gisette_train) are feature-wisely scaled to [-1,1]. Then the testing data (gisette_valid) are scaled based on the same scaling factors for the training data. These two scaled data sets are used in [GXY11a]
+    # of classes: 2
+    # of data: 6,000 / 1,000 (testing)
+    # of features: 5,000	
+
+3. letter
+    Source: Statlog / Letter
+    Preprocessing: Training data is further separated into two sets, tr and val. [CWH01a]
+    # of classes: 26
+    # of data: 15,000 / 5,000 (testing) / 10,500 (tr) / 4,500 (val)
+    # of features: 16
+	
+4. madelon
+    Source: NIPS 2003 Feature Selection Challenge [IG05a]
+    Preprocessing: The data set is also available at UCI. Because the labels of testing set are not available, here we use the validation set (madelon_valid.data and madelon_valid.labels) as the testing set.
+    # of classes: 2
+    # of data: 2,000 / 600 (testing)
+    # of features: 500
+	
+5. svmguide1
+    Source: [CWH03a]
+    Preprocessing: Original data: an astroparticle application from Jan Conrad of Uppsala University, Sweden.
+    # of classes: 2
+    # of data: 3,089 / 4,000 (testing)
+    # of features: 4
+	
+6. vowel
+    Source: UCI / Vowel
+    Preprocessing: First 528 instances are used as training and the remaining instances are for testing. Scaling training data first and adjust testing data accordingly.
+    # of classes: 11
+    # of data: 528 / 462 (testing)
+    # of features: 10
+	
+7. w1a
+    Source: [JP98a]
+    # of classes: 2
+    # of data: 2,477 / 47,272 (testing)
+    # of features: 300 / 300 (testing) 
+	
+8. news20
+    Source: [KL95a]
+    Preprocessing: First 80/20 training/testing split. Also see this page [JR01a]
+    # of classes: 20
+    # of data: 15,935 / 3,993 (testing)
+    # of features: 62,061 / 62,060 (testing) 
+	
+9. pendigits
+    Source: UCI / Pen-Based Recognition of Handwritten Digits Data Set
+    # of classes: 10
+    # of data: 7,494 / 3,498 (testing)
+    # of features: 16
+	
+10. shuttle
+    Source: Statlog / Shuttle
+    Preprocessing: Training data is further separated into two sets, tr and val. [CWH01a]
+    # of classes: 7
+    # of data: 43,500 / 14,500 (testing) / 30,450 (tr) / 13,050 (val)
+    # of features: 9
