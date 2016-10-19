@@ -26,7 +26,7 @@ def write_svm_file (x , y , file_name) :
 def run (data_name , select_method , data_num_size , base_size , base_error , train_x , train_y , test_x , test_y) :
 	train_x_copy = copy.deepcopy(train_x) ;
 	train_y_copy = copy.deepcopy(train_y) ;
-	
+
 	E_out = [1.0] ;
 	write_svm_file (train_x_copy , train_y_copy , data_name+'-'+'temp2.train') ;
 	cmd = '../../liblinear-incdec-2.01/train -s 2 -q ' + data_name+'-'+ 'temp2.train' ;
@@ -34,7 +34,7 @@ def run (data_name , select_method , data_num_size , base_size , base_error , tr
 	m = load_model (data_name+'-'+'temp2.train.model') ;
 	# m = train (train_y_copy , train_x_copy , '-s 2 -q') ;
 	label , acc , val = predict(train_y_copy , train_x_copy , m) ;
-	
+
 	new_val = list(map(max , val)) ;
 	new_val = list(map(abs , new_val)) ;
 	train_x_copy = [x for (v , x) in sorted(zip(new_val , train_x_copy)) ] ;
@@ -51,11 +51,11 @@ def run (data_name , select_method , data_num_size , base_size , base_error , tr
 			subprocess.call (cmd.split()) ;
 			m2 = load_model (data_name+'-'+'temp2.train.model') ;
 			# m2 = train(train_y_copy , train_x_copy , '-s 2 -q') ;
-			
+
 			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
 			E_out.append(p_acc[0]/base_error) ;
-	
-	return E_out ;		
+
+	return E_out ;
 
 # ------------------------------------
 
@@ -114,7 +114,7 @@ subprocess.call (cmd.split()) ;
 
 query_num = np.arange(1.00 , 0.89 , -0.01) ;
 plt.subplot2grid((5,5), (0,0), colspan=5 , rowspan=4) ;
-ax = plt.gca() ; 
+ax = plt.gca() ;
 ax.xaxis.set_major_locator( MultipleLocator(0.01) ) ;
 # ax.xaxis.set_minor_locator( MultipleLocator(0.01) ) ;
 # ax.yaxis.set_major_locator( MultipleLocator(0.1) ) ;
