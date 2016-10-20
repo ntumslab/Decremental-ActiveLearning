@@ -135,21 +135,21 @@ E_in_1 = [x / base_acc_in for x in E_in_1]
 E_out_1 = [x / base_acc_out for x in E_in_1]
 # ------------------------------------
 step = round(0.1 / len(E_out_1), 5)
-terminal = step * len(E_out_1)
-query_num = np.arange(1.00 , terminal , -step)
+terminal = 1.00 - step * len(E_out_1)
+query_num = [1.00 - step * x for x in range(len(E_out_1))]
 
 plt.subplot2grid((5,5), (0,0), colspan=5 , rowspan=4)
 ax = plt.gca()
-ax.xaxis.set_major_locator( MultipleLocator(step) )
+ax.xaxis.set_major_locator( MultipleLocator(0.01) )
 
 plt.xlabel('% of Data')
 plt.ylabel('Acc rate')
 plt.xlim(1.00, terminal)
-# plt.ylim(0.8 , 1.2) ;
+plt.ylim(0.0 , 0.02)
 plt.grid()
 
 
-plt.title(pure_data_name + '_out_' + ('%.3f' % base_acc_in))
+plt.title(pure_data_name + '_out_' + ('%.3f' % base_acc_out))
 plt.plot(query_num, E_out_0, 'k', label='total')
 #plt.plot(query_num, E_out_02, 'r', label='noise')
 plt.plot(query_num, E_out_1, 'bo--', label='greedy')
@@ -161,17 +161,17 @@ plt.cla()
 
 # ----------------------------------------------------------
 step = round(0.1 / len(E_in_1), 5)
-terminal = step * len(E_in_1)
-query_num = np.arange(1.00 , terminal , -step)
+terminal = 1.00 - step * len(E_in_1)
+query_num = [1.00 - step * x for x in range(len(E_in_1))]
 
 plt.subplot2grid((5,5), (0,0), colspan=5 , rowspan=4)
 ax = plt.gca()
-ax.xaxis.set_major_locator( MultipleLocator(step) )
+ax.xaxis.set_major_locator( MultipleLocator(0.01) )
 
 plt.xlabel('% of Data')
 plt.ylabel('Acc rate')
 plt.xlim(1.00, terminal)
-# plt.ylim(0.8 , 1.2) ;
+# plt.ylim(0.8 , 1.2)
 plt.grid()
 
 
