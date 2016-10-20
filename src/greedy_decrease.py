@@ -5,6 +5,7 @@ import copy
 import subprocess
 import time
 import sys
+import pickle
 
 import matplotlib
 matplotlib.use('Agg')
@@ -15,6 +16,7 @@ from matplotlib.ticker import MultipleLocator, FuncFormatter
 # ------------------------------------
 
 train_file_name = sys.argv[1]
+pickle_path = sys.argv[2]
 test_file_name = train_file_name + '.t'
 pure_data_name = (train_file_name.split('/'))[len(train_file_name.split('/'))-1]
 
@@ -133,6 +135,10 @@ for it in range(data_num_size+1):
 
 E_in_1 = [x / base_acc_in for x in E_in_1]
 E_out_1 = [x / base_acc_out for x in E_in_1]
+
+
+with open(pickle_path) as store:
+    pickle.dump((pure_data_name, remove_order, E_out_1, E_in_1), store)
 # ------------------------------------
 step = round(0.1 / len(E_out_1), 5)
 terminal = 1.00 - step * len(E_out_1)
