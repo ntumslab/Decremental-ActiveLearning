@@ -10,6 +10,7 @@ import sys ;
 from scipy.spatial import distance ;
 import re ;
 import math ;
+import statistics ;
 
 import matplotlib ;
 matplotlib.use('Agg') ;
@@ -270,15 +271,17 @@ class SVM_Outlier:
 	train_y_copy = [];
 	record_model = [] ;
 	format_x = [] ;
-	weight = []
+	weight = [] ;
+	wrong_label_index = [] ;
 	nr_class = 0 ;
 	label = [] ;
 	nr_feature = 0 ;
 	bias = 0 ;
+	nr_wrong_label = 0 ;
 
 	value = [] ;
 
-	total_value = [] ;# record all the points total value   Purpose: distinguish whether the point on the right side or not. If total_value>0, right side. otherwise wrong side
+	#total_value = [] ;# record all the points total value   Purpose: distinguish whether the point on the right side or not. If total_value>0, right side. otherwise wrong side
 	compare_distance = [] ;# absolute distance between weighted line and point
 
 	false_index = [] ;# record index which is not in right label
@@ -298,12 +301,15 @@ class SVM_Outlier:
 		self.nr_class = 0 ;
 		self.nr_feature = 0 ;
 		self.bias = 0 ;
+		self.nr_wrong_label = 0 ;# record the number of wrong label node from SVM line
+		self.percent_of_wrong_label = 0.0 ;
 		self.label = [] ;
 		self.value = [] ;
-		self.total_value = [] ;
+		#self.total_value = [] ;
 		self.false_index = [] ;
 		self.false_range = [];
 		self.compare_distance = [] ;
+		self.wrong_label_index = [] ;
 
 	def reconstruct_X(self):
 		for i in range(len(self.train_x_copy)):
@@ -341,47 +347,25 @@ class SVM_Outlier:
 					read_value.append((float)(temp_array[1])) ;
 				except ValueError:
 					read_value.append(-0.00000001) ;
+					"""
 					print("i", i) ;
 					print("j", j) ;
 					print("y", self.train_y_copy[i]) ;
 					print(temp_array[1]) ;
+					"""
 
 
 			for j in range(1,self.nr_feature+1,1):#feature start at 1
 				if (j in read_feature):
 					format_x_temp.append(read_value[ptr]) ;
 					ptr = ptr + 1 ;
+
 				else:
 					format_x_temp.append(0) ;
 
 			self.format_x.append(format_x_temp) ;
 
 		#print("format_x[1]",format_x[1]) ;
-		"""
-		weight  = [0.01384472438273333,0.01442689397791132,-0.0007031121332655758,-0.008830199052905132] ;
-		for i in range(len(train_x_copy)):
-			total_value = bias ;
-			for j in range(len(weight)):
-				total_value = total_value + weight[j]*format_x[i][j] ;
-
-			if(total_value > 0):
-				prediction.append(1) ;
-			else:
-				prediction.append(0) ;
-
-		test = 0 ;
-		for i in range(2000):
-			if(prediction[i] == 1):
-				test = test + 1 ;
-
-		print("2000 test:",test) ;
-		
-		for i in range(len(train_y_copy)):
-			if(train_y_copy[i] == prediction[i]):
-				total = total + 1 ;
-		AC = total/(float)(len(train_y_copy)) ;
-		print("accuracy", AC) ;
-		"""
 	def load_model_parameter(self):
 		self.nr_class = ((int)(self.record_model[1][1])) ;
 
@@ -390,7 +374,7 @@ class SVM_Outlier:
 		for i in range(1 ,len(self.record_model[2]), 1):
 			self.label.append((int)(self.record_model[2][i])) ;
 		self.nr_feature = (int)(self.record_model[3][1]) ;
-		bias = 0 ; # (int)(self.record_model[4][1]) ;
+		# (int)(self.record_model[4][1]) ;
 		if(self.nr_class == 2):
 			count = 1 ;
 		else:
@@ -404,7 +388,7 @@ class SVM_Outlier:
 			self.weight.append(temp_weight) ;
 	def calculate_value(self):
 		for i in range(len(self.train_x_copy)):
-			temp_total_value = 0 ;
+			temp_total_value = self.bias ;
 			temp_weight = [] ;
 			sum = 0 ;
 			
@@ -415,23 +399,23 @@ class SVM_Outlier:
 				#print(self.label) ;
 				weight_index = self.label.index((int)(self.train_y_copy[i])) ;# choose correct weight
 
-				if(i<=11):
-					print("label", i) ;
-					print(self.label[weight_index]) ;
+				#if(i<=11):
+					#print("label", i) ;
+					#print(self.label[weight_index]) ;
 
 				temp_weight = self.weight[weight_index] ;
 
 			for j in range(len(temp_weight)):
 				temp_total_value = temp_total_value + temp_weight[j]*self.format_x[i][j] ;# if total
 
-				if(i<=11):
-					print("i", self.format_x[i][j]) ;
+				#if(i<=11):
+					#print("i", self.format_x[i][j]) ;
 
 				sum = sum + temp_weight[j]*temp_weight[j] ;
 			
 			denominator = math.sqrt(sum) ;
 			temp_compare_distance = temp_total_value/denominator ;
-			self.total_value.append(temp_total_value) ;
+			#self.total_value.append(temp_total_value) ;
 			if(self.nr_class == 2):
 				self.compare_distance.append(abs(temp_compare_distance)) ;
 			else:
@@ -464,15 +448,25 @@ class SVM_Outlier:
 					self.test_total = self.test_total + 1 ;
 				else:
 					self.compare_distance[i] = 0 - (self.compare_distance[i]);
+					self.nr_wrong_label = self.nr_wrong_label + 1 ;
+					self.wrong_label_index.append(i) ;
+		else:
+			for i in range(len(self.compare_distance)):
+				if(self.compare_distance[i]<0):
+					self.nr_wrong_label = self.nr_wrong_label + 1 ;
+					self.wrong_label_index.append(i) ;
+
+		self.percent_of_wrong_label = self.nr_wrong_label/(float)(len(self.train_x_copy)) ;
+		self.percent_of_wrong_label = self.percent_of_wrong_label * 100 ;
 
 
 
+		if(self.nr_class == 2):
+			for i in range(len(self.train_x_copy)):
+				if(self.train_y_copy[i] == self.value[i]):
+					self.test_total = self.test_total + 1 ;
 
-		for i in range(len(self.train_x_copy)):
-			if(self.train_y_copy[i] == self.value[i]):
-				self.test_total = self.test_total + 1 ;
-
-		self.test_accuracy = self.test_total/(float)(len(self.train_y_copy)) ;
+			self.test_accuracy = self.test_total/(float)(len(self.train_y_copy)) ;
 		#print("AC accuracy", self.test_accuracy) ;
 		
 
@@ -485,8 +479,582 @@ class SVM_Outlier:
 		self.load_model_parameter() ;
 		self.reconstruct_X() ;
 		self.calculate_value() ;
+		self.prediction_compare() ;
+class SVM_Outlier_Angle:# number of class = 2
+	train_x_copy= [] ;
+	train_y_copy = [];
+	record_model = [] ;
+	format_x = [] ;
+	weight = []
+	nr_class = 0 ;
+	label = [] ;
+	nr_feature = 0 ;
+	bias = 0 ;
+	nr_wrong_label = 0 ;
+
+	right_label_index = [] ;
+	right_label_X = [] ;
+	right_label_Y = [] ;
+	wrong_label_index = [] ;
+	wrong_label_X = [] ;
+	wrong_label_Y = [] ;
+
+	vector_cos = [] ;
+	variance_cos = [] ;# method key
+
+	value = [] ;
+
+	#total_value = [] ;# record all the points total value   Purpose: distinguish whether the point on the right side or not. If total_value>0, right side. otherwise wrong side
+	compare_distance = [] ;# absolute distance between weighted line and point
+
+	false_index = [] ;# record index which is not in right label
+	false_range = [] ;# record false index's range between the right weighted line
+
+	test_total = 0 ;
+	test_accuracy = 0 ;
+
+	def __init__(self, train_x_copy, train_y_copy, record_model):
+		self.train_x_copy = train_x_copy ;
+		self.train_y_copy = train_y_copy ;
+		self.record_model = record_model ;
+
+	def refresh(self):
+		self.format_x = [] ;
+		self.weight = [] ;
+		self.nr_class = 0 ;
+		self.nr_feature = 0 ;
+		self.bias = 0 ;
+		self.nr_wrong_label = 0 ;# record the number of wrong label node from SVM line
+		self.percent_of_wrong_label = 0.0 ;
+		self.label = [] ;
+		self.value = [] ;
+		#self.total_value = [] ;
+		self.false_index = [] ;
+		self.false_range = [];
+		self.compare_distance = [] ;
+
+		self.right_label_index = [] ;
+		self.right_label_X = [] ;
+		self.right_label_Y = [] ;
+		self.wrong_label_index = [] ;
+		self.wrong_label_X = [] ;
+		self. wrong_label_Y = [] ;
+
+		self.vector_cos = [] ;
+		self.variance_cos = [] ;# method key
+
+	def reconstruct_X(self):
+		for i in range(len(self.train_x_copy)):
+			read_feature = [] ;
+			read_value = [] ;
+			temp_fragement = [] ;
+			match = [] ;
+			format_x_temp = [] ;
+			temp_fragement_str = "";
+			temp_row_last = "" ;
+			temp_row = "" ;
+			c = 'c' ;
+			ptr = 0 ;# read_value pointer
+
+			temp_row = str(self.train_x_copy[i]) ;
+
+			for j in range(len(temp_row)):
+				c =  temp_row[j] ;
+				if(ord(c)>=44 and ord(c)<=58):
+					temp_fragement_str = temp_fragement_str + c ;
+		
+			temp_fragement = temp_fragement_str.split(',');
+
+
+			for j in range(len(temp_fragement)):
+				temp = "" ;
+				temp_array = [] ;
+				temp = str(temp_fragement[j]) ;
+				temp_array = temp.split(':') ;
+				read_feature.append((int)(temp_array[0])) ;
+
+				
+				
+				try:
+					read_value.append((float)(temp_array[1])) ;
+				except ValueError:
+					read_value.append(-0.00000001) ;
+					"""
+					print("i", i) ;
+					print("j", j) ;
+					print("y", self.train_y_copy[i]) ;
+					print(temp_array[1]) ;
+					"""
+
+
+			for j in range(1,self.nr_feature+1,1):#feature start at 1
+				if (j in read_feature):
+					format_x_temp.append(read_value[ptr]) ;
+					ptr = ptr + 1 ;
+
+				else:
+					format_x_temp.append(0) ;
+
+			self.format_x.append(format_x_temp) ;
+
+	def load_model_parameter(self):
+		self.nr_class = ((int)(self.record_model[1][1])) ;
+
+		self.label = [] ;
+
+		for i in range(1 ,len(self.record_model[2]), 1):
+			self.label.append((int)(self.record_model[2][i])) ;
+		self.nr_feature = (int)(self.record_model[3][1]) ;
+		if(self.nr_class == 2):
+			count = 1 ;
+		else:
+			count = self.nr_class ;
+		for i in range(count):
+			temp_weight = [] ;
+
+			for j in range(6, len(self.record_model), 1):
+				temp_weight.append((float)(self.record_model[j][i])) ;
+
+			self.weight.append(temp_weight) ;
+	def calculate_value(self):
+		for i in range(len(self.train_x_copy)):
+			temp_total_value = self.bias ;
+			temp_weight = [] ;
+			sum = 0 ;
+			
+			if(self.nr_class == 2):
+				temp_weight = self.weight[0] ;
+			else:
+				#print("label") ;
+				#print(self.label) ;
+				weight_index = self.label.index((int)(self.train_y_copy[i])) ;# choose correct weight
+
+				#if(i<=11):
+					#print("label", i) ;
+					#print(self.label[weight_index]) ;
+
+				temp_weight = self.weight[weight_index] ;
+
+			for j in range(len(temp_weight)):
+				temp_total_value = temp_total_value + temp_weight[j]*self.format_x[i][j] ;# if total
+
+				#if(i<=11):
+					#print("i", self.format_x[i][j]) ;
+
+				sum = sum + temp_weight[j]*temp_weight[j] ;
+			
+			denominator = math.sqrt(sum) ;
+			temp_compare_distance = temp_total_value/denominator ;
+			#self.total_value.append(temp_total_value) ;
+			if(self.nr_class == 2):
+				self.compare_distance.append(abs(temp_compare_distance)) ;
+			else:
+				self.compare_distance.append(temp_compare_distance) ;
+			
+			
+			
+			if(self.nr_class == 2):
+				####### do prediction to check our theorem
+				#######
+				if(temp_total_value>0):
+					self.value.append(self.label[0]) ;
+				else:
+					self.value.append(self.label[1]) ;
+			"""
+			else:
+				if(temp_compare_distance>0):
+					self.value.append(self.train_y_copy[i]) ;
+				else:
+					self.false_index.append(i) ;
+					#calculate range between weighted line, ranger bigger, chance to be kick off bigger
+					print("not in train_y_copy") ;
+			#self.value.append(temp_compare_distance) ;
+			"""
+			
+	def prediction_compare(self):
+		if(self.nr_class == 2):
+			for i in range(len(self.train_x_copy)):
+				if(self.train_y_copy[i] == self.value[i]):
+					self.right_label_index.append(i) ;
+					self.right_label_X.append(self.format_x[i]) ;
+					self.right_label_Y.append(self.train_y_copy[i]) ;
+					self.test_total = self.test_total + 1 ;
+				else:
+					self.compare_distance[i] = 0 - (self.compare_distance[i]);
+					self.wrong_label_index.append(i) ;
+					self.wrong_label_X.append(self.format_x[i]) ;
+					self.wrong_label_Y.append(self.train_y_copy[i]) ;
+					self.nr_wrong_label = self.nr_wrong_label + 1 ;
+		else:
+			for i in range(len(self.compare_distance)):
+				if(self.compare_distance[i]<0):
+					self.nr_wrong_label = self.nr_wrong_label + 1 ;
+
+		self.percent_of_wrong_label = self.nr_wrong_label/(float)(len(self.train_x_copy)) ;
+		self.percent_of_wrong_label = self.percent_of_wrong_label * 100 ;
+
+
+
+		if(self.nr_class == 2):
+			for i in range(len(self.train_x_copy)):
+				if(self.train_y_copy[i] == self.value[i]):
+					self.test_total = self.test_total + 1 ;
+
+			self.test_accuracy = self.test_total/(float)(len(self.train_y_copy)) ;
+
+	def prediction_angle(self):
+		for i in range(len(self.wrong_label_X)):
+			#print("i:", i) ;
+			temp_vector_cos = [] ;
+			vector_1 = [] ;
+			vector_2 = [] ;
+			wrong_1 = self.wrong_label_X[i] ;
+			wrong_1_Y = self.wrong_label_Y[i] ;
+			for j in range(len(self.right_label_index)):
+				right_1 = self.right_label_X[j] ;
+				right_1_Y = self.right_label_Y[j] ;
+				if(wrong_1_Y == right_1_Y):
+					break ;
+			vector_1 = self.vector_minus(right_1, wrong_1) ;
+			for k in range( j+1, len(self.right_label_index), 1):
+				right_2 = self.right_label_X[k] ;
+				right_2_Y = self.right_label_Y[k] ;
+				if(wrong_1_Y == right_2_Y):
+					vector_2 = self.vector_minus(right_2, wrong_1) ;
+					inner_product = self.vector_inner_product(vector_1, vector_2) ;
+
+					vector_1_pow = self.vector_pow(vector_1) ;
+					vector_2_pow = self.vector_pow(vector_2) ;
+
+					cos = inner_product/(vector_1_pow*vector_2_pow) ;
+					temp_vector_cos.append(cos) ;
+			self.vector_cos.append(temp_vector_cos) ;
+
+		"""
+		print("right_label_index", len(self.right_label_index)) ;
+		for i in range(len(self.wrong_label_X)):
+			print("i:", i) ;
+			temp_vector_cos = [] ;
+			vector_1 = [] ;
+			wrong_1 = self.wrong_label_X[i] ;
+			wrong_1_Y = self.wrong_label_Y[i] ;
+			for j in range(len(self.right_label_index)):
+				right_1 = self.right_label_X[j] ;
+				right_1_Y = self.right_label_Y[j] ;
+				if(wrong_1_Y == right_1_Y):
+					vector_1 = self.vector_minus(right_1, wrong_1) ;
+					vector_2 = [] ;
+					count = 0 ;
+					while count<=10 :
+						k = randint(0, len(self.right_label_index)-1) ;
+						right_2 = self.right_label_X[k] ;
+						right_2_Y = self.right_label_Y[k] ;
+						if(wrong_1_Y == right_2_Y):
+							count = count + 1 ;
+							vector_2 = self.vector_minus(right_2, wrong_1) ;
+
+							inner_product = self.vector_inner_product(vector_1, vector_2) ;
+
+							vector_1_pow = self.vector_pow(vector_1) ;
+							vector_2_pow = self.vector_pow(vector_2) ;
+
+							cos = inner_product/(vector_1_pow*vector_2_pow) ;
+							temp_vector_cos.append(cos) ;
+		"""
+					
+	def angle_variance(self):
+		for i in range(len(self.vector_cos)):
+			#print(self.vector_cos[i]) ;
+			var = statistics.variance(self.vector_cos[i]) ;
+			self.variance_cos.append(var) ;
+	def vector_minus(self, vec_1, vec_2):
+		vector = [] ;
+		temp = 0.0 ;
+		for i in range(len(vec_1)):
+			temp = vec_1[i] - vec_2[i] ;
+			vector.append(temp) ;
+		return vector ;
+	def vector_plus(self, vec_1, vec_2):
+		vector = [] ;
+		temp = 0.0 ;
+		for i in range(len(vec_1)):
+			temp = vec_1 + vec_2 ;
+			vector.append(temp) ;
+		return vector ;
+	def vector_inner_product(self, vec_1, vec_2):
+		inner_product = 0.0 ;
+		for i in range(len(vec_1)):
+			inner_product = inner_product + vec_1[i] * vec_2[i] ;
+		return inner_product ;
+	def vector_pow(self, vec_1):
+		temp = 0.0 ;
+		for i in range(len(vec_1)):
+			temp = temp + vec_1[i] * vec_1[i] ;
+		return temp ;
+	def main_control(self):
+		self.refresh() ;
+		self.load_model_parameter() ;
+		self.reconstruct_X() ;
+		self.calculate_value() ;
 		if(self.nr_class == 2):
 			self.prediction_compare() ;
+			self.prediction_angle() ;
+			self.angle_variance() ;
+class General:
+	train_x_copy = [] ;
+	record_model = [] ;
+	format_x = [] ;
+	weight = []
+	nr_class = 0 ;
+	label = [] ;
+	nr_feature = 0 ;
+	def __init__(self, train_x_copy, record_model):
+		self.train_x_copy = copy.deepcopy(train_x_copy) ;
+		self.record_model = copy.deepcopy(record_model) ;
+	def load_model_parameter(self):
+		self.nr_class = ((int)(self.record_model[1][1])) ;
+
+		self.label = [] ;
+
+		for i in range(1 ,len(self.record_model[2]), 1):
+			self.label.append((int)(self.record_model[2][i])) ;
+		self.nr_feature = (int)(self.record_model[3][1]) ;
+		if(self.nr_class == 2):
+			count = 1 ;
+		else:
+			count = self.nr_class ;
+		for i in range(count):
+			temp_weight = [] ;
+
+			for j in range(6, len(self.record_model), 1):
+				temp_weight.append((float)(self.record_model[j][i])) ;
+
+			self.weight.append(temp_weight) ;
+
+	def reconstruct_X(self):
+		for i in range(len(self.train_x_copy)):
+			read_feature = [] ;
+			read_value = [] ;
+			temp_fragement = [] ;
+			match = [] ;
+			format_x_temp = [] ;
+			temp_fragement_str = "";
+			temp_row_last = "" ;
+			temp_row = "" ;
+			c = 'c' ;
+			ptr = 0 ;# read_value pointer
+
+			temp_row = str(self.train_x_copy[i]) ;
+
+			for j in range(len(temp_row)):
+				c =  temp_row[j] ;
+				if(ord(c)>=44 and ord(c)<=58):
+					temp_fragement_str = temp_fragement_str + c ;
+		
+			temp_fragement = temp_fragement_str.split(',');
+
+
+			for j in range(len(temp_fragement)):
+				temp = "" ;
+				temp_array = [] ;
+				temp = str(temp_fragement[j]) ;
+				temp_array = temp.split(':') ;
+				read_feature.append((int)(temp_array[0])) ;
+
+				
+				
+				try:
+					read_value.append((float)(temp_array[1])) ;
+				except ValueError:
+					read_value.append(-0.00000001) ;
+					"""
+					print("i", i) ;
+					print("j", j) ;
+					print("y", self.train_y_copy[i]) ;
+					print(temp_array[1]) ;
+					"""
+
+
+			for j in range(1,self.nr_feature+1,1):#feature start at 1
+				if (j in read_feature):
+					format_x_temp.append(read_value[ptr]) ;
+					ptr = ptr + 1 ;
+
+				else:
+					format_x_temp.append(0) ;
+
+			self.format_x.append(format_x_temp) ;
+	def refresh(self):
+		#train_x_copy = [] ;
+		#record_model = [] ;
+		self.format_x = [] ;
+		self.weight = []
+		self.nr_class = 0 ;
+		self.label = [] ;
+		self.nr_feature = 0 ;
+	def main_control(self):
+		self.refresh() ;
+		self.load_model_parameter() ;
+		self.reconstruct_X() ;
+
+		
+class ROF_Method:
+	train_x_copy= [] ;
+	train_y_copy = [];
+	CR_List = [] ; # record every round of clusterSize and ROF value
+	nr_each_label = [] ;
+	resolution_max = 0.0 ;
+	resolution_min = 0.0 ;
+	current_r = 0.0 ;
+	delta_r_percent = 0.1 ;# 4% - 10% #a1a 0.3
+	nr_topN = 5 ;
+	All_Is_Cluster = False ;
+	number_of_point = 0 ;
+	number_of_unmerged_point = 1000 ;
+
+	def __init__(self, train_x_copy, train_y_copy) :
+		self.train_x_copy = [] ;
+		self.train_y_copy = [] ;
+		self.train_x_copy = copy.deepcopy(train_x_copy) ;
+		self.train_y_copy = copy.deepcopy(train_y_copy) ;
+
+		#self.train_x_copy = train_x_copy ;
+		#self.train_y_copy = train_y_copy ;
+		print("IN_nr_train_x_copy", len(self.train_x_copy)) ;
+		print("IN_nr_train_y_copy", len(self.train_y_copy)) ;
+		self.number_of_point = len(self.train_x_copy) ;
+
+	def refresh(self):
+		self.CR_List = [] ; # record every round of clusterSize and ROF value
+		self.nr_each_label = [] ; # record  nuber of each label
+		self.resolution_max = 0.0 ;
+		self.resolution_min = 0.0 ;
+		self.current_r = 0.0 ;
+		self.delta_r_percent = 100 ;# 4% - 10%  a1a:0.25
+		self.nr_topN = 50 ;
+		self.All_Is_Cluster = False ;
+		self.number_of_unmerged_point = 1000 ;
+		
+		for i in range(self.number_of_point):
+			self.nr_each_label.append(1) ;
+
+	def calculate_resolution_range(self):
+		#max_min_neiDist = 0.0 ;
+		#min_min_neiDist = 0.0 ;
+		min_neiDist = [] ;
+		for i in range(len(self.train_x_copy)):# 1605
+			minimum = 1000000000.0 ;
+			for j in range(len(self.train_x_copy)):
+				if(self.train_y_copy[i] == self.train_y_copy[j] and i != j):
+					temp = self.euc_dist(self.train_x_copy[i], self.train_x_copy[j]) ;
+					if(temp<minimum):
+						minimum = temp ;
+				else:
+					continue ;
+			min_neiDist.append(minimum) ;
+		max_min_neiDist = max(min_neiDist) ;
+		min_min_neiDist = min(min_neiDist) ;
+		while(min_min_neiDist<=0):
+			pop_index = min_neiDist.index(min_min_neiDist) ;
+			min_neiDist.pop(pop_index) ;
+			min_min_neiDist = min(min_neiDist) ;
+		self.resolution_min = 1/max_min_neiDist ;
+		self.resolution_max = 1/min_min_neiDist ;
+		"""
+		if(self.resolution_min * 10 < self.resolution_max):
+			self.resolution_min = self.resolution_max/4.0 ;
+		"""
+	class Cluster_ROF_Data: # record one round
+		ClusterSize = [] ;
+		ROF = [] ;
+		label = [] ;
+		def __init__(self) :
+			print("OO") ;
+		def start(self, number_of_point):
+			self.ClusterSize = [] ;
+			self.ROF = [] ;
+			self.label = [] ;
+			for i in range(number_of_point):
+				self.ClusterSize.append(1) ;
+				self.ROF.append(0) ;
+				self.label.append(i) ;
+
+	def RB_MINE(self):
+		Ind_CR_List = self.Cluster_ROF_Data() ;
+		Ind_CR_List.start(len(self.train_x_copy)) ;
+		self.CR_List.append(Ind_CR_List) ;
+		self.calculate_resolution_range() ;# calculate max resolution and min resolution
+		current_r = self.resolution_max ;
+
+		self.All_Is_Cluster = True ;
+		round = 1 ;
+		while (self.All_Is_Cluster == True) and (self.number_of_unmerged_point > self.nr_topN):
+		#while(current_r>=self.resolution_min):
+			self.All_Is_Cluster = False ;
+			current_r = current_r - (current_r - self.resolution_min) * self.delta_r_percent ;
+			self.RB_CLUSTER( round, current_r) ;
+			
+			#print("round",round) ;
+			round = round + 1 ;
+	def RB_CLUSTER(self, round, current_r):# start from round 1
+		self.number_of_unmerged_point = 0 ;
+		Ind_CR_List = self.Cluster_ROF_Data() ;
+		for i in range(self.number_of_point):
+			Ind_CR_List.ClusterSize = copy.deepcopy(self.CR_List[round-1].ClusterSize) ;
+			Ind_CR_List.label = copy.deepcopy(self.CR_List[round-1].label) ;
+			Ind_CR_List.ROF = copy.deepcopy(self.CR_List[round-1].ROF) ;
+		self.CR_List.append(Ind_CR_List) ;
+
+		for i in range(len(self.train_x_copy)):# reset coordinate by resolution r
+			for j in range(len(self.train_x_copy[i])):
+				self.train_x_copy[i][j] = self.train_x_copy[i][j] * current_r ;
+
+		for i in range(self.number_of_point):# update Label and ClusterSize
+			Merged_point = False ;
+			for j in range(i, self.number_of_point, 1):
+				if(self.train_y_copy[i] == self.train_y_copy[j]  and self.CR_List[round].label[i] != self.CR_List[round].label[j]  and i != j ):
+					temp_dist = self.euc_dist(self.train_x_copy[i], self.train_x_copy[j]) ;
+					if(temp_dist<=1):
+						self.All_Is_Cluster = True ;
+						Merged_point = True ;
+						if(self.CR_List[round].label[i]<self.CR_List[round].label[j]):# update label
+							self.CR_List[round].label[j] = self.CR_List[round].label[i] ;
+							self.nr_each_label[i] = self.nr_each_label[i] + 1 ;
+						else:
+							self.CR_List[round].label[i] = self.CR_List[round].label[j] ;
+							self.nr_each_label[j] = self.nr_each_label[j] + 1 ;
+						#self.CR_List[round].ClusterSize[i] = self.CR_List[round].ClusterSize[i] + 1 ;
+						#self.CR_List[round].ClusterSize[j] = self.CR_List[round].ClusterSize[j] + 1 ;
+			if(Merged_point == False): # record number_of_unmerged_point 
+				self.number_of_unmerged_point = self.number_of_unmerged_point + 1 ;
+
+		# synchronized each point's ClusterSize
+		for i in range(self.number_of_point):
+			label = self.CR_List[round].label[i] ;
+			self.CR_List[round].ClusterSize[i] = self.nr_each_label[label] ;
+
+		# update ROF
+		for i in range(self.number_of_point):
+			self.CR_List[round].ROF[i] = self.CR_List[round-1].ROF[i] + ((self.CR_List[round-1].ClusterSize[i] - 1)/(float)(self.CR_List[round].ClusterSize[i])) ;
+
+	def main_control(self):
+		self.refresh() ;
+		self.RB_MINE() ;
+		self.train_x_copy = [] ;
+		self.train_y_copy = [] ;
+
+					
+	def euc_dist(self, a, b):
+		temp = 0.0 ;
+		for i in range(len(a)):
+			temp = temp + ((a[i] - b[i]) * (a[i] - b[i])) ;
+		temp = math.pow(temp, 0.5) ;
+		return temp ;
+		
+
+
+
+
 
 		
 
@@ -526,138 +1094,58 @@ def run (data_name , select_method , data_num_size , base_size , base_acc_in , b
 	E_in = [noise_acc_in/base_acc_in] ;
 	E_out = [noise_acc_out/base_acc_out] ;
 	# m = train (train_y_copy , train_x_copy , '-s 2 -q') ;
+	"""
+	record_model = [] ;
+	with open(data_name+'-temp2.train.model') as fp: # data_name+'-temp2.train.model
+		for line in fp:
+			temp_str = "" ;
+			temp_array = [] ;
+			temp_record_model = [] ;
+			temp_str = str(line) ;
+			temp_str = temp_str.rstrip('\n') ;
+			temp_array = temp_str.split(' ') ;
+
+			for j in range(len(temp_array)):
+				temp_record_model.append(temp_array[j]) ;
+			record_model.append(temp_record_model) ;
+
+	gen =  General(train_x_copy, record_model) ;
+	gen.load_model_parameter() ;
+	gen.reconstruct_X() ;
+
+
+	rof = ROF_Method(gen.format_x, train_y_copy) ;
+	rof.main_control() ;
+	for i in range(len(rof.CR_List)):
+		print("\n") ;
+		print("i", i) ;
+		print("\n") ;
+		for j in range(10):
+			print("label", rof.CR_List[i].label[j]) ;
+			print("ClusterSize", rof.CR_List[i].ClusterSize[j]) ;
+			print("ROF", rof.CR_List[i].ROF[j]) ;
+	"""
+
 	
 	if (select_method == 1) :
-		"""
-		record_model = [] ;
-		with open(pure_data_name+'-temp.train.model') as fp:
-			for line in fp:
-				temp_str = "" ;
-				temp_array = [] ;
-				temp_record_model = [] ;
-				temp_str = str(line) ;
-				temp_str = temp_str.rstrip('\n') ;
-				temp_array = temp_str.split(' ') ;
-
-				for j in range(len(temp_array)):
-					temp_record_model.append(temp_array[j]) ;
-
-				record_model.append(temp_record_model) ;
-
-		svm_outlier = SVM_Outlier(train_x_copy, train_y_copy, record_model) ;
-		svm_outlier.main_control() ;
-		print("nr_class", svm_outlier.nr_class) ;
-		print("label", svm_outlier.label) ;
-		print("nr_feature", svm_outlier.nr_feature) ;
-		print("bias", svm_outlier.bias) ;
-		"""
-		"""
-		format_x = [] ;
-		nr_class = 2 ;
-		label = [1,0] ;
-		number_of_feature = 4 ;
-		prediction = [];
-		bias = 0 ;
-		total = 0 ;
-
-		record_model = [] ;
-		with open(pure_data_name+'-temp.train.model') as fp:
-			for line in fp:
-				temp_str = "" ;
-				temp_array = [] ;
-				temp_record_model = [] ;
-				temp_str = str(line) ;
-				temp_str = temp_str.rstrip('\n') ;
-				temp_array = temp_str.split(' ') ;
-
-				for j in range(len(temp_array)):
-					temp_record_model.append(temp_array[j]) ;
-
-				record_model.append(temp_record_model) ;
-
-		print("record_model") ;
-		for i in range(20):
-			print(i) ;
-			print(record_model[i]) ;
-
-
-				
-				
-		
-		#value = 0.01673985079826928 * x1 + 0.01571213174904187 * x2 - 0.001405405001835395 * x3 - 0.009803531349488146 * x4 - bias ;
-
-		for i in range(len(train_x_copy)):
-			read_feature = [] ;
-			read_value = [] ;
-			temp_fragement = [] ;
-			match = [] ;
-			format_x_temp = [] ;
-			temp_fragement_str = "";
-			temp_row_last = "" ;
-			temp_row = "" ;
-			c = 'c' ;
-			ptr = 0 ;# read_value pointer
-
-			temp_row = str(train_x_copy[i]) ;
-
-			for j in range(len(temp_row)):
-				c =  temp_row[j] ;
-				if(ord(c)>=44 and ord(c)<=58):
-					temp_fragement_str = temp_fragement_str + c ;
-		
-			temp_fragement = temp_fragement_str.split(',');
-
-
-			for j in range(len(temp_fragement)):
-				temp = "" ;
-				temp_array = [] ;
-				temp = str(temp_fragement[j]) ;
-				temp_array = temp.split(':') ;
-				read_feature.append((int)(temp_array[0])) ;
-				read_value.append((float)(temp_array[1])) ;
-	
-			for j in range(1,number_of_feature+1,1):#feature start at 1
-				if (j in read_feature):
-					format_x_temp.append(read_value[ptr]) ;
-					ptr = ptr + 1 ;
-				else:
-					format_x_temp.append(0) ;
-
-			format_x.append(format_x_temp) ;
-
-		print("format_x[1]",format_x[1]) ;
-
-		weight  = [0.01384472438273333,0.01442689397791132,-0.0007031121332655758,-0.008830199052905132] ;
-		for i in range(len(train_x_copy)):
-			total_value = bias ;
-			for j in range(len(weight)):
-				total_value = total_value + weight[j]*format_x[i][j] ;
-
-			if(total_value > 0):
-				prediction.append(1) ;
-			else:
-				prediction.append(0) ;
-
-		test = 0 ;
-		for i in range(2000):
-			if(prediction[i] == 1):
-				test = test + 1 ;
-
-		print("2000 test:",test) ;
-		
-		for i in range(len(train_y_copy)):
-			if(train_y_copy[i] == prediction[i]):
-				total = total + 1 ;
-		AC = total/(float)(len(train_y_copy)) ;
-		print("accuracy", AC) ;
-		"""
-		
-
+		# hybrid
 
 		for i in range (data_num_size) :
+			record_model = [] ;
+			with open(data_name+'-temp2.train.model') as fp: # data_name+'-temp2.train.model
+				for line in fp:
+					temp_str = "" ;
+					temp_array = [] ;
+					temp_record_model = [] ;
+					temp_str = str(line) ;
+					temp_str = temp_str.rstrip('\n') ;
+					temp_array = temp_str.split(' ') ;
+
+					for j in range(len(temp_array)):
+						temp_record_model.append(temp_array[j]) ;
+					record_model.append(temp_record_model) ;
 			for j in range (base_size) :
 				temp_int = randint (0,len(train_x_copy)-1) ;
-				# temp_int = len(train_x_copy)-1 ;
 				train_x_copy.pop(temp_int) ;
 				train_y_copy.pop(temp_int) ;
 			write_svm_file (train_x_copy , train_y_copy , data_name+'-temp2.train') ;
@@ -671,7 +1159,89 @@ def run (data_name , select_method , data_num_size , base_size , base_acc_in , b
 			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
 			E_out.append(p_acc[0]/base_acc_out) ;
 
+
+
+		"""
+		for i in range (data_num_size) :
+			for j in range (base_size) :
+				temp_int = randint (0,len(train_x_copy)-1) ;
+				train_x_copy.pop(temp_int) ;
+				train_y_copy.pop(temp_int) ;
+			write_svm_file (train_x_copy , train_y_copy , data_name+'-temp2.train') ;
+			cmd = '../../liblinear-incdec-2.01/train -s 2 -q -i ' + data_name+'-temp2.train.model ' + data_name+'-temp2.train' ;
+			subprocess.call (cmd.split()) ;
+			m2 = load_model (data_name+'-temp2.train.model') ;
+			# m2 = train(train_y_copy , train_x_copy , '-s 2 -q') ;
+			
+			p_label , p_acc , p_val = predict(train_y , train_x , m2) ;
+			E_in.append(p_acc[0]/base_acc_in) ;
+			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
+			E_out.append(p_acc[0]/base_acc_out) ;
+		"""
+
 	elif (select_method == 2) :
+
+		for i in range (data_num_size) :
+			"""
+			record_model = [] ;
+			with open(data_name+'-temp2.train.model') as fp: # data_name+'-temp2.train.model
+				for line in fp:
+					temp_str = "" ;
+					temp_array = [] ;
+					temp_record_model = [] ;
+					temp_str = str(line) ;
+					temp_str = temp_str.rstrip('\n') ;
+					temp_array = temp_str.split(' ') ;
+
+					for j in range(len(temp_array)):
+						temp_record_model.append(temp_array[j]) ;
+					record_model.append(temp_record_model) ;
+
+				#print("i", i) ;
+
+			svm_outlier_angle = SVM_Outlier_Angle(train_x_copy, train_y_copy, record_model) ;
+			svm_outlier_angle.main_control() ;
+			"""
+			record_model = [] ;
+			with open(data_name+'-temp2.train.model') as fp: # data_name+'-temp2.train.model
+				for line in fp:
+					temp_str = "" ;
+					temp_array = [] ;
+					temp_record_model = [] ;
+					temp_str = str(line) ;
+					temp_str = temp_str.rstrip('\n') ;
+					temp_array = temp_str.split(' ') ;
+
+					for j in range(len(temp_array)):
+						temp_record_model.append(temp_array[j]) ;
+					record_model.append(temp_record_model) ;
+			svm_outlier_angle = SVM_Outlier_Angle(train_x_copy, train_y_copy, record_model) ;
+			svm_outlier_angle.main_control() ;
+		
+			for j in range (base_size) :
+	
+				#svm_outlier_angle = SVM_Outlier_Angle(train_x_copy, train_y_copy, record_model) ;
+				#svm_outlier_angle.main_control() ;
+				if(len(svm_outlier_angle.variance_cos)>0):
+					temp = svm_outlier_angle.variance_cos.index(min(svm_outlier_angle.variance_cos)) ;
+					temp_pop_index = svm_outlier_angle.wrong_label_index[temp] ;
+					
+					svm_outlier_angle.variance_cos.pop(temp) ;
+
+					train_x_copy.pop(temp_pop_index) ;
+					train_y_copy.pop(temp_pop_index) ;
+
+			write_svm_file (train_x_copy , train_y_copy , data_name+'-temp2.train') ;
+			cmd = '../../liblinear-incdec-2.01/train -s 2 -q -i ' + data_name+'-temp2.train.model ' + data_name+'-temp2.train' ;
+			subprocess.call (cmd.split()) ;
+			m2 = load_model (data_name+'-temp2.train.model') ;
+			# m2 = train(train_y_copy , train_x_copy , '-s 2 -q') ;
+			
+			p_label , p_acc , p_val = predict(train_y , train_x , m2) ;
+			E_in.append(p_acc[0]/base_acc_in) ;
+			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
+			E_out.append(p_acc[0]/base_acc_out) ;
+		"""
 		dst_list = [0.0 for k in range(len(train_x_copy))] ;
 		for k in range(len(train_x_copy)) :
 			temp_min_dst = 10000000.0 ;
@@ -701,8 +1271,72 @@ def run (data_name , select_method , data_num_size , base_size , base_acc_in , b
 			E_in.append(p_acc[0]/base_acc_in) ;
 			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
 			E_out.append(p_acc[0]/base_acc_out) ;
+			"""
 	
 	elif (select_method == 3) :
+		for i in range (data_num_size) :
+			"""
+			record_model = [] ;
+			with open(data_name+'-temp2.train.model') as fp: # data_name+'-temp2.train.model
+				for line in fp:
+					temp_str = "" ;
+					temp_array = [] ;
+					temp_record_model = [] ;
+					temp_str = str(line) ;
+					temp_str = temp_str.rstrip('\n') ;
+					temp_array = temp_str.split(' ') ;
+
+					for j in range(len(temp_array)):
+						temp_record_model.append(temp_array[j]) ;
+					record_model.append(temp_record_model) ;
+
+			#print("i", i) ;
+
+			svm_outlier = SVM_Outlier(train_x_copy, train_y_copy, record_model) ;
+			svm_outlier.main_control() ;
+			"""
+			record_model = [] ;
+			with open(data_name+'-temp2.train.model') as fp: # data_name+'-temp2.train.model
+				for line in fp:
+					temp_str = "" ;
+					temp_array = [] ;
+					temp_record_model = [] ;
+					temp_str = str(line) ;
+					temp_str = temp_str.rstrip('\n') ;
+					temp_array = temp_str.split(' ') ;
+
+					for j in range(len(temp_array)):
+						temp_record_model.append(temp_array[j]) ;
+					record_model.append(temp_record_model) ;
+			svm_outlier = SVM_Outlier(train_x_copy, train_y_copy, record_model) ;
+			svm_outlier.main_control() ;
+
+			for j in range (base_size) :
+				
+
+				#print("i", i) ;
+
+				#svm_outlier = SVM_Outlier(train_x_copy, train_y_copy, record_model) ;
+				#svm_outlier.main_control() ;
+				
+				temp_pop_index = svm_outlier.compare_distance.index(min(svm_outlier.compare_distance)) ;# min
+
+				svm_outlier.compare_distance.pop(temp_pop_index) ;
+			
+				train_x_copy.pop(temp_pop_index) ;
+				train_y_copy.pop(temp_pop_index) ;
+
+			write_svm_file (train_x_copy , train_y_copy , data_name+'-temp2.train') ;
+			cmd = '../../liblinear-incdec-2.01/train -s 2 -q -i ' + data_name+'-temp2.train.model ' + data_name+'-temp2.train' ;
+			subprocess.call (cmd.split()) ;
+			m2 = load_model (data_name+'-temp2.train.model') ;
+			# m2 = train(train_y_copy , train_x_copy , '-s 2 -q') ;
+			
+			p_label , p_acc , p_val = predict(train_y , train_x , m2) ;
+			E_in.append(p_acc[0]/base_acc_in) ;
+			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
+			E_out.append(p_acc[0]/base_acc_out) ;
+		"""
 		total_f = dict() ;
 		for k in range(len(train_x_copy)) :
 			if (train_y_copy[k] not in total_f) :
@@ -738,8 +1372,73 @@ def run (data_name , select_method , data_num_size , base_size , base_acc_in , b
 			E_in.append(p_acc[0]/base_acc_in) ;
 			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
 			E_out.append(p_acc[0]/base_acc_out) ;
+			"""
+	elif (select_method == 4) :# data svmguide1 resolution_max = 4.25 , resolution_min =0.015 ; a1a resolution_max = 1 , resolution_min = 0.28~0.35
+		for i in range (data_num_size) :
+			record_model = [] ;
+			with open(data_name+'-temp2.train.model') as fp: # data_name+'-temp2.train.model
+				for line in fp:
+					temp_str = "" ;
+					temp_array = [] ;
+					temp_record_model = [] ;
+					temp_str = str(line) ;
+					temp_str = temp_str.rstrip('\n') ;
+					temp_array = temp_str.split(' ') ;
+
+					for j in range(len(temp_array)):
+						temp_record_model.append(temp_array[j]) ;
+					record_model.append(temp_record_model) ;
+			"""
+			gen =  General(train_x_copy, record_model) ;
+			gen.main_control() ;
+			#print("OUT_train_x,_copy" , len(gen.format_x)) ;
+			#print("OUT_train_y_copy" , len(train_y_copy)) ;
+			rof = ROF_Method(gen.format_x, train_y_copy) ;
+			rof.main_control() ;
+			"""
+			svm_outlier = SVM_Outlier(train_x_copy, train_y_copy, record_model) ;
+			svm_outlier.main_control() ;
+
+			gen =  General(train_x_copy, record_model) ;
+			gen.main_control() ;
+			print("OUT_train_x,_copy" , len(gen.format_x)) ;
+			print("OUT_train_y_copy" , len(train_y_copy)) ;
+
+			rof = ROF_Method(gen.format_x, train_y_copy) ;
+			rof.main_control() ;
+			for j in range (base_size) :
+				"""
+				while(True):
+					ROF_min = min(rof.CR_List[len(rof.CR_List)-1].ROF) ;
+					temp_int = rof.CR_List[len(rof.CR_List)-1].ROF.index(ROF_min) ;
+					rof.CR_List[len(rof.CR_List)-1].ClusterSize.pop(temp_int) ;
+					rof.CR_List[len(rof.CR_List)-1].label.pop(temp_int) ;
+					rof.CR_List[len(rof.CR_List)-1].ROF.pop(temp_int) ;
+					if(temp_int in svm_outlier.wrong_label_index):
+						break ;
+				"""
+				ROF_min = min(rof.CR_List[len(rof.CR_List)-1].ROF) ;
+				temp_int = rof.CR_List[len(rof.CR_List)-1].ROF.index(ROF_min) ;
+				rof.CR_List[len(rof.CR_List)-1].ClusterSize.pop(temp_int) ;
+				rof.CR_List[len(rof.CR_List)-1].label.pop(temp_int) ;
+				rof.CR_List[len(rof.CR_List)-1].ROF.pop(temp_int) ;
+				print("ROF_min", ROF_min) ;
+				
+				print("resolution_min", rof.resolution_min) ;
+				print("resolution_max", rof.resolution_max) ;
+				train_x_copy.pop(temp_int) ;
+				train_y_copy.pop(temp_int) ;
+			write_svm_file (train_x_copy , train_y_copy , data_name+'-temp2.train') ;
+			cmd = '../../liblinear-incdec-2.01/train -s 2 -q -i ' + data_name+'-temp2.train.model ' + data_name+'-temp2.train' ;
+			subprocess.call (cmd.split()) ;
+			m2 = load_model (data_name+'-temp2.train.model') ;
+			# m2 = train(train_y_copy , train_x_copy , '-s 2 -q') ;
 			
-	elif (select_method == 4) :
+			p_label , p_acc , p_val = predict(train_y , train_x , m2) ;
+			E_in.append(p_acc[0]/base_acc_in) ;
+			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
+			E_out.append(p_acc[0]/base_acc_out) ;
+		"""
 		dst_list = [0.0 for k in range(len(train_x_copy))] ;
 		for k in range(len(train_x_copy)) :
 			temp_min_dst = 10000000.0 ;
@@ -769,8 +1468,32 @@ def run (data_name , select_method , data_num_size , base_size , base_acc_in , b
 			E_in.append(p_acc[0]/base_acc_in) ;
 			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
 			E_out.append(p_acc[0]/base_acc_out) ;
+			"""
 	
 	elif (select_method == 5) :
+
+		LOF_point = LOF(train_x_copy, train_y_copy, K, MinPts) ; 
+		LOF_point.main_control() ; 
+
+		for i in range (data_num_size) :
+			for j in range (base_size) :
+				temp_pop_index = LOF_point.all_LOF_list.index(max(LOF_point.all_LOF_list)) ;#max
+				#temp_pop_index = dst_list.index(max(dst_list)) ;
+				LOF_point.all_LOF_list.pop(temp_pop_index) ;
+				train_x_copy.pop(temp_pop_index) ;
+				train_y_copy.pop(temp_pop_index) ;
+			write_svm_file (train_x_copy , train_y_copy , data_name+'-temp2.train') ;
+			cmd = '../../liblinear-incdec-2.01/train -s 2 -q -i ' + data_name+'-temp2.train.model ' + data_name+'-temp2.train' ;
+			subprocess.call (cmd.split()) ;
+			m2 = load_model (data_name+'-temp2.train.model') ;
+			# m2 = train(train_y_copy , train_x_copy , '-s 2 -q') ;
+			
+			p_label , p_acc , p_val = predict(train_y , train_x , m2) ;
+			E_in.append(p_acc[0]/base_acc_in) ;
+			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
+			E_out.append(p_acc[0]/base_acc_out) ;
+
+		"""
 		total_f = dict() ;
 		for k in range(len(train_x_copy)) :
 			if (train_y_copy[k] not in total_f) :
@@ -806,9 +1529,10 @@ def run (data_name , select_method , data_num_size , base_size , base_acc_in , b
 			E_in.append(p_acc[0]/base_acc_in) ;
 			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
 			E_out.append(p_acc[0]/base_acc_out) ;
+			"""
 	
 	elif (select_method == 6) :
-
+		"""
 		temp_max = 0 ;
 		for k in range(len(train_x_copy)) :
 			for f in train_x_copy[k].keys() :
@@ -865,6 +1589,7 @@ def run (data_name , select_method , data_num_size , base_size , base_acc_in , b
 			E_in.append(p_acc[0]/base_acc_in) ;
 			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
 			E_out.append(p_acc[0]/base_acc_out) ;
+			"""
 	elif (select_method == 7) :
 
 		for i in range (data_num_size) :
@@ -895,7 +1620,7 @@ def run (data_name , select_method , data_num_size , base_size , base_acc_in , b
 				"""
 				temp_pop_index = svm_outlier.compare_distance.index(min(svm_outlier.compare_distance)) ;# min
 
-				print(temp_pop_index, svm_outlier.compare_distance[temp_pop_index]) ;
+				#print(temp_pop_index, svm_outlier.compare_distance[temp_pop_index]) ;
 				
 				# temp_int = len(train_x_copy)-1 ;
 				train_x_copy.pop(temp_pop_index) ;
@@ -964,8 +1689,34 @@ def run (data_name , select_method , data_num_size , base_size , base_acc_in , b
 			p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
 			E_out.append(p_acc[0]/base_acc_out) ;
 			"""
+	return E_in , E_out ;	
+def percentage_wrong_label(data_name  , data_num_size ,  train_x , train_y) :
+	train_x_copy = copy.deepcopy(train_x) ;
+	train_y_copy = copy.deepcopy(train_y) ;
 	
-	return E_in , E_out ;		
+	write_svm_file (train_x_copy , train_y_copy , data_name+'-temp2.train') ;
+	cmd = '../../liblinear-incdec-2.01/train -s 2 -q ' + data_name+'-temp2.train' ;
+	subprocess.call (cmd.split()) ;
+	m = load_model (data_name+'-temp2.train.model') ;	
+	record_model = [] ;
+	with open(data_name+'-temp2.train.model') as fp: # data_name+'-temp2.train.model
+		for line in fp:
+			temp_str = "" ;
+			temp_array = [] ;
+			temp_record_model = [] ;
+			temp_str = str(line) ;
+			temp_str = temp_str.rstrip('\n') ;
+			temp_array = temp_str.split(' ') ;
+
+			for j in range(len(temp_array)):
+				temp_record_model.append(temp_array[j]) ;
+			record_model.append(temp_record_model) ;
+
+				#print("i", i) ;
+
+	svm_outlier_run = SVM_Outlier(train_x_copy, train_y_copy, record_model) ;
+	svm_outlier_run.main_control() ;
+	return svm_outlier_run.percent_of_wrong_label ;
 
 # ------------------------------------
 
@@ -1008,44 +1759,49 @@ E_out_0 = [1.0 for i in range(data_num_size+1)] ;
 
 # random
 
+per_wrong_label = percentage_wrong_label(pure_data_name, data_num_size,train_x , train_y) ;
+
 select_method = 1 ;
-E_in_1 , E_out_1 = run (pure_data_name , select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
+E_in_1 , E_out_1= run (pure_data_name , select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
 print ('random') ;
 print (E_out_1) ;
 
+
 select_method = 2 ;
 E_in_2 , E_out_2 = run (pure_data_name , select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
-print ('Euclidean distance each other') ;
+print ('svm_outlier_angle') ;
 print (E_out_2) ;
 
 select_method = 3 ;
 E_in_3 , E_out_3 = run (pure_data_name , select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
-print ('Euclidean distance mean') ;
+print ('svm_outlier_distance') ;
 print (E_out_3) ;
+
 
 select_method = 4 ;
 E_in_4 , E_out_4 = run (pure_data_name , select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
-print ('Manhattan distance each other') ;
+print ('ROF') ;
 print (E_out_4) ;
 
 select_method = 5 ;
 E_in_5 , E_out_5 = run (pure_data_name , select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
-print ('Manhattan distance mean') ;
+print ('LOF') ; # Manhattan distance mean
 print (E_out_5) ;
-
+"""
 select_method = 6 ;
 E_in_6 , E_out_6 = run (pure_data_name , select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
 print ('Mahalanobis distance mean') ;
 print (E_out_6) ;
+
 
 select_method = 7 ;
 E_in_7 , E_out_7 = run (pure_data_name , select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
 print ('SVM_Outlier') ;
 print (E_out_7) ;
 
-"""
+
 select_method = 8 ;
-E_in_8 , E_out_8 = run (pure_data_name , select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
+E_in_8 , E_out_8, per_wrong_label = run (pure_data_name , select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
 print ('Different_LOF') ;
 print (E_out_8) ;
 """
@@ -1079,19 +1835,19 @@ plt.xlim(1.00 , 0.90) ;
 # plt.ylim(0.8 , 1.2) ;
 plt.grid () ;
 
-plt.title(pure_data_name + '_in_' + ('%.3f' % base_acc_in)) ;
+plt.title(pure_data_name + '_in_' + ('%.3f' % base_acc_in) + 'wrong_pr' +  ('%.3f' % per_wrong_label)) ;
 plt.plot(query_num, E_in_0, 'k', label='total') ;
 plt.plot(query_num, E_in_1, 'bo--', label='random') ;
-plt.plot(query_num, E_in_2, 'rv--', label='Euc pair') ;
-plt.plot(query_num, E_in_3, 'g^--', label='Euc mean') ;
-plt.plot(query_num, E_in_4, 'c*--', label='Man pair') ;
-plt.plot(query_num, E_in_5, 'mx--', label='Man mean') ;
-plt.plot(query_num, E_in_6, 'yx--', label='Mah mean') ;
-plt.plot(query_num, E_in_7, 'rx--', label='SVM_Outlier') ;
+plt.plot(query_num, E_in_2, 'rv--', label='SVM_Angle') ;
+plt.plot(query_num, E_in_3, 'g^--', label='SVM_Dist') ;
+plt.plot(query_num, E_in_4, 'c*--', label='ROF_NO_SVM') ;
+plt.plot(query_num, E_in_5, 'mx--', label='LOF') ; #Man mean
+#plt.plot(query_num, E_in_6, 'yx--', label='Mah mean') ;
+#plt.plot(query_num, E_in_7, 'rx--', label='SVM_Outlier') ;
 #plt.plot(query_num, E_in_8, 'kx--', label='DIF_LOF Man') ;
 
 plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),fancybox=True, shadow=True, ncol=3) ;
-plt.savefig(pure_data_name + '_in' + '.png') ;
+plt.savefig(pure_data_name + '_in_ROF_NO_SVM' + '.png') ;
 
 plt.cla() ;
 
@@ -1110,19 +1866,19 @@ plt.xlim(1.00 , 0.90) ;
 # plt.ylim(0.5 , 1.5) ;
 plt.grid () ;
 
-plt.title(pure_data_name + '_out' + ('%.3f' % base_acc_out)) ;
+plt.title(pure_data_name + '_out' + ('%.3f' % base_acc_out) + 'wrong_pr' +  ('%.3f' % per_wrong_label)) ;
 plt.plot(query_num, E_out_0, 'k', label='total') ;
 plt.plot(query_num, E_out_1, 'bo--', label='random') ;
-plt.plot(query_num, E_out_2, 'rv--', label='Euc pair') ;
-plt.plot(query_num, E_out_3, 'g^--', label='Euc mean') ;
-plt.plot(query_num, E_out_4, 'c*--', label='Man pair') ;
-plt.plot(query_num, E_out_5, 'mx--', label='Man mean') ;
-plt.plot(query_num, E_out_6, 'yx--', label='Mah mean') ;
-plt.plot(query_num, E_out_7, 'rx--', label='SVM_Outlier') ;
+plt.plot(query_num, E_out_2, 'rv--', label='SVM_Angle') ;
+plt.plot(query_num, E_out_3, 'g^--', label='SVM_Dist') ;
+plt.plot(query_num, E_out_4, 'c*--', label='ROF_NO_SVM') ;
+plt.plot(query_num, E_out_5, 'mx--', label='LOF') ;# Man mean
+#plt.plot(query_num, E_out_6, 'yx--', label='Mah mean') ;
+#plt.plot(query_num, E_out_7, 'rx--', label='SVM_Outlier') ;
 #plt.plot(query_num, E_out_8, 'kx--', label='DIF_LOF Man') ;
 
 plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),fancybox=True, shadow=True, ncol=3) ;
-plt.savefig(pure_data_name + '_out' + '.png') ;
+plt.savefig(pure_data_name + '_out_ROF_NO_SVM' + '.png') ;
 
 plt.cla() ;
 
