@@ -7,9 +7,10 @@ import random ;
 
 # -----------------------------------------------
 
-input_file_name = sys.argv[1] ;
+origin_file_name = sys.argv[1] ;
+input_file_name = origin_file_name + '.s1' ;
 mode = sys.argv[2] ;
-output_file_name = input_file_name + '.n' + mode ;
+output_file_name = origin_file_name + '.n' + mode ;
 
 
 # -----------------------------------------------
@@ -49,7 +50,7 @@ input_file.close() ;
 	
 # -------------------------------------------------
 
-noise_num = sample_num*2/100 ;
+noise_num = sample_num*10/100 ;
 avg_feature_num = total_feature_num/sample_num ;
 
 label_list = list(label_set) ;
