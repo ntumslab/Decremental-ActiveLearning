@@ -71,7 +71,6 @@ E_out_0 = [1.0 for i in range(data_num_size+1)]
 cmd = 'rm ' + pure_data_name + '-temp.train.model'
 subprocess.call (cmd.split())
 # ------------------------------------
-'''
 N = len(train_y)
 remain_dict  = range(N)
 remove_order=[]
@@ -178,4 +177,4 @@ plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),fancybox=True, shadow=
 plt.savefig(output_Folder + pure_data_name + '_Ein_s1_in.png')
 
 plt.cla()
-'''
+
