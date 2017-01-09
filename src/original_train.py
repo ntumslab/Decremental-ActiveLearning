@@ -15,6 +15,7 @@ import pickle ;
 import random ;
 
 from itertools import permutations ;
+from sklearn import svm ;
 import matplotlib ;
 matplotlib.use('Agg') ;
 import matplotlib.pyplot as plt ;
@@ -1327,10 +1328,505 @@ class Validation:
             self.train_less_x.append(temp_train_less_x) ;
             self.train_less_y.append(temp_train_less_y) ;
             """
+class ROF_UnLabeled_Method:
+    train_x_copy= [] ;
+    train_y_copy = [];
+    CR_List = [] ; # record every round of clusterSize and ROF value
+    nr_each_label = [] ;
+    resolution_max = 0.0 ;
+    resolution_min = 0.0 ;
+    current_r = 0.0 ;
+    delta_r_percent = 0.04;# 4% - 10% 
+    nr_topN = 0 ;
+    All_Is_Cluster = False ;
+    number_of_point = 0 ;
+    number_of_unmerged_point = 1000 ;
+    nr_unmerge_list = [] ;
+
+    def __init__(self, train_x_copy, train_y_copy, top_n) :
+        self.train_x_copy = [] ;
+        self.train_y_copy = [] ;
+        self.train_x_copy = copy.deepcopy(train_x_copy) ;
+        self.train_y_copy = copy.deepcopy(train_y_copy) ;
+        self.nr_topN = top_n ;
+        #self.train_x_copy = train_x_copy ;
+        #self.train_y_copy = train_y_copy ;
+        print("IN_nr_train_x_copy", len(self.train_x_copy)) ;
+        print("IN_nr_train_y_copy", len(self.train_y_copy)) ;
+        self.number_of_point = len(self.train_x_copy) ;
+
+    def refresh(self):
+        self.CR_List = [] ; # record every round of clusterSize and ROF value
+        self.nr_each_label = [] ; # record  nuber of each label
+        self.resolution_max = 0.0 ;
+        self.resolution_min = 0.0 ;
+        self.current_r = 0.0 ;
+        self.delta_r_percent = 0.1 ;# 4% - 10%  a1a:0.25
+        self.All_Is_Cluster = False ;
+        self.number_of_unmerged_point = 1000 ;
+        self.nr_unmerge_list = [] ;
+        
+        for i in range(self.number_of_point):
+            self.nr_each_label.append(1) ;
+
+    def calculate_resolution_range(self):
+        #max_min_neiDist = 0.0 ;
+        #min_min_neiDist = 0.0 ;
+        min_neiDist = [] ;
+        for i in range(len(self.train_x_copy)):# 1605
+            minimum = 1000000000.0 ;
+            for j in range(len(self.train_x_copy)):
+                if( i != j ):
+                    temp = self.euc_dist(self.train_x_copy[i], self.train_x_copy[j]) ;
+                    if(temp<minimum):
+                        minimum = temp ;
+                else:
+                    continue ;
+            min_neiDist.append(minimum) ;
+        max_min_neiDist = max(min_neiDist) ;
+        min_min_neiDist = min(min_neiDist) ;
+
+        while(min_min_neiDist<=0):
+            pop_index = min_neiDist.index(min_min_neiDist) ;
+            min_neiDist.pop(pop_index) ;
+            min_min_neiDist = min(min_neiDist) ;
+
+        self.resolution_min = 1/max_min_neiDist ;
+        self.resolution_max = 1/min_min_neiDist ;
+        """
+        if(self.resolution_min * 10 < self.resolution_max):
+            self.resolution_min = self.resolution_max/4.0 ;
+        """
+    class Cluster_ROF_Data: # record one round
+        ClusterSize = [] ;
+        ROF = [] ;
+        label = [] ;
+        def __init__(self) :
+            print("OO") ;
+        def start(self, number_of_point):
+            self.ClusterSize = [] ;
+            self.ROF = [] ;
+            self.label = [] ;
+            for i in range(number_of_point):
+                self.ClusterSize.append(1) ;
+                self.ROF.append(0) ;
+                self.label.append(i) ;
+    def RB_MINE(self):
+
+        Ind_CR_List = self.Cluster_ROF_Data() ;
+        Ind_CR_List.start(len(self.train_x_copy)) ;
+        self.CR_List.append(Ind_CR_List) ;
+        self.calculate_resolution_range() ;# calculate max resolution and min resolution
+        #print("resolution_max", self.resolution_max) ;
+        #print("resolution_min", self.resolution_min) ;
+        self.current_r = self.resolution_max ;
+        #print("before while current_r", self.current_r) ;
+        self.All_Is_Cluster = True ;
+        round = 1 ;
+        while  (self.number_of_unmerged_point > self.nr_topN): # (self.All_Is_Cluster == True) and (self.number_of_unmerged_point > self.nr_topN)
+        #while(current_r>=self.resolution_min):
+            self.All_Is_Cluster = False ;
+            self.current_r = self.current_r - (self.current_r - self.resolution_min) * self.delta_r_percent ; # current_r = current_r - (current_r - self.resolution_min) * self.delta_r_percent   # self.resolution_max
+            #print("\n") ;
+            #print("round",round) ;
+            #print("current_r", self.current_r) ;
+            self.RB_CLUSTER( round, self.current_r) ;
+            round = round + 1 ;
+    def RB_CLUSTER(self, round, current_r):# start from round 1
+
+        self.number_of_unmerged_point = 0 ;
+        Ind_CR_List = self.Cluster_ROF_Data() ;
+        for i in range(self.number_of_point):
+            Ind_CR_List.ClusterSize = copy.deepcopy(self.CR_List[round-1].ClusterSize) ;
+            Ind_CR_List.label = copy.deepcopy(self.CR_List[round-1].label) ;
+            Ind_CR_List.ROF = copy.deepcopy(self.CR_List[round-1].ROF) ;
+        self.CR_List.append(Ind_CR_List) ;
+
+        for i in range(len(self.train_x_copy)):# reset coordinate by resolution r
+            for j in range(len(self.train_x_copy[i])):
+                self.train_x_copy[i][j] = self.train_x_copy[i][j] * current_r ;
+
+        for i in range(self.number_of_point):# update Label and ClusterSize
+            #Merged_point = False ;
+            for j in range(i, self.number_of_point, 1):
+                if( self.CR_List[round].label[i] != self.CR_List[round].label[j]  and i != j ):
+                    temp_dist = self.euc_dist(self.train_x_copy[i], self.train_x_copy[j]) ;# euclidean distance ; maybe should try maha distance
+                    if(temp_dist<=1):
+                        self.All_Is_Cluster = True ;
+                        #Merged_point = True ;
+                        if(self.CR_List[round].label[i]<self.CR_List[round].label[j]):# update label
+                            self.CR_List[round].label[j] = self.CR_List[round].label[i] ;
+                            self.nr_each_label[i] = self.nr_each_label[i] + 1 ;
+                        else:
+                            self.CR_List[round].label[i] = self.CR_List[round].label[j] ;
+                            self.nr_each_label[j] = self.nr_each_label[j] + 1 ;
+                        #self.CR_List[round].ClusterSize[i] = self.CR_List[round].ClusterSize[i] + 1 ;
+                        #self.CR_List[round].ClusterSize[j] = self.CR_List[round].ClusterSize[j] + 1 ;
+            """
+            if(Merged_point == False): # record number_of_unmerged_point 
+                self.number_of_unmerged_point = self.number_of_unmerged_point + 1 ;
+            """
+
+        # synchronized each point's ClusterSize
+        for i in range(self.number_of_point):
+            label = self.CR_List[round].label[i] ;
+            self.CR_List[round].ClusterSize[i] = self.nr_each_label[label] ;
+        # count unmerged points
+        for i in range(self.number_of_point):
+            temp_size = self.CR_List[round].ClusterSize[i] ;
+            if(temp_size == 1):
+                self.number_of_unmerged_point = self.number_of_unmerged_point + 1 ;
+        print("number_of_unmerged_point", self.number_of_unmerged_point) ;
+        self.nr_unmerge_list.append(self.number_of_unmerged_point) ; # record nr_unmerge_point
+        # update ROF
+        for i in range(self.number_of_point):
+            self.CR_List[round].ROF[i] = self.CR_List[round-1].ROF[i] + ((self.CR_List[round-1].ClusterSize[i] - 1)/(float)(self.CR_List[round].ClusterSize[i])) ;
+
+    def main_control(self):
+        self.refresh() ;
+        self.RB_MINE() ;
+        self.train_x_copy = [] ;
+        self.train_y_copy = [] ;
+
+                    
+    def euc_dist(self, a, b):
+        temp = 0.0 ;
+        for i in range(len(a)):
+            temp = temp + ((a[i] - b[i]) * (a[i] - b[i])) ;
+        temp = math.pow(temp, 0.5) ;
+        return temp ;
+class KNN:
+    train_x_copy= [] ;
+    train_y_copy = [] ;
+    neighbor_list = [] ; # record nearest neighbor index
+    wrong_percent_list = [] ;
+    data_length = 0 ;
+    k = 0 ;
+    threshold = 0.0 ;
+    def __init__(self, train_x_copy, train_y_copy , k, p): # find nearest k neighbor and decide p threshold
+        self.train_x_copy = [] ;
+        self.train_y_copy = [] ;
+        self.train_x_copy = copy.deepcopy(train_x_copy) ;
+        self.data_length = len(self.train_x_copy) ;
+        self.train_y_copy = copy.deepcopy(train_y_copy) ;
+        self.k = k ;
+        self.threshold = p ;
+    def main_control(self):
+        self.refresh() ;
+        self.find_nearest_neighbor() ;
+        self.compare_neighbor() ;
+        self.record_percentage() ;
+    def refresh(self):
+        self.neighbor_list = [] ;
+        self.wrong_percent_list = [] ;
+    def find_nearest_neighbor(self):
+        for i in range(self.data_length):
+            temp_neighbor_dist = [] ;
+            temp_neighbor_list = [] ;
+
+            for j in range(self.data_length):
+                if( i != j ):
+                    temp = [self.train_x_copy[i] , self.train_x_copy[j]] ;
+                    words = sorted(list(reduce(set.union, map(set, temp)))) ;
+                    feats = zip(*[[d.get(w, 0) for d in temp] for w in words]) ;
+                    #dst = distance.euclidean(feats[0],feats[1]) ;
+                    dst = distance.cityblock(feats[0],feats[1]) ;
+                    
+                   # dst = self.euc_dist(self.train_x_copy[i], self.train_x_copy[j]) ;
+                    if(len(temp_neighbor_list)<self.k):
+                        temp_neighbor_dist.append(dst) ;
+                        temp_neighbor_list.append(j) ;
+                    else:
+                        if(dst<max(temp_neighbor_dist)):
+                            temp_max_index = temp_neighbor_dist.index(max(temp_neighbor_dist)) ;
+                            temp_neighbor_dist[temp_max_index] = dst ;
+                            temp_neighbor_list[temp_max_index] = j ;
+            self.neighbor_list.append(temp_neighbor_list) ;
+    def compare_neighbor(self):
+        for i in range(self.data_length):
+            q_list = [] ;
+            n_list = [] ;
+            temp_neighbor_list = [] ;
+            temp_neighbor_list = self.neighbor_list[i] ;
+            print("i", i) ;
+            print("temp_neighbor_list", temp_neighbor_list) ;
+            label_q = self.train_y_copy [i] ;
+            count = 0.0 ;
+            for j in range(self.k):
+                neighbor_index = temp_neighbor_list[j] ;
+                label_n = self.train_y_copy[j] ;
+                if(label_q != label_n):
+                    q_list.append(label_q) ;
+                    n_list.append(label_n) ;
+                    count = count + 1 ;
+            percentage_of_difference = 0.0 ;
+            percentage_of_difference = count/(float)(self.k) ;
+            print("q_list", q_list) ;
+            print("n_list", n_list) ;
+            print("count", count) ;
+            print("percentage_of_difference", percentage_of_difference) ;
+            #my idea !!!!!!!!  I use percentage_of_difference instead of threshold, therefore I could pick the maximum value of wrong_percent_list as my outlier
+            self.wrong_percent_list.append(percentage_of_difference) ;
+            #!!!!
+    def record_percentage(self):
+        upper_one = 0 ;
+        upper_dot_nine = 0 ;
+        upper_dot_six= 0 ;
+        upper_dot_four = 0 ;
+        upper_dot_two = 0 ;
+        upper_dot_zero = 0 ;
+        for i in range(len(self.wrong_percent_list)):
+            temp_percent = self.wrong_percent_list[i]
+            if(temp_percent >= 1.0):
+                upper_one = upper_one + 1 ;
+            elif(temp_percent >= 0.9):
+                upper_dot_nine = upper_dot_nine + 1 ;
+            elif(temp_percent >= 0.6):
+                upper_dot_six = upper_dot_six + 1 ;
+            elif(temp_percent >= 0.4):
+                upper_dot_four = upper_dot_four + 1 ;
+            elif(temp_percent >= 0.2):
+                upper_dot_two = upper_dot_two + 1 ;
+            else:
+                upper_dot_zero = upper_dot_zero + 1 ;
+        print("upper_one", upper_one) ;
+        print("upper_dot_nine", upper_dot_nine) ;
+        print("upper_dot_six", upper_dot_six) ;
+        print("upper_dot_four", upper_dot_four) ;
+        print("upper_dot_two", upper_dot_two) ;
+        print("upper_dot_zero", upper_dot_zero) ;
+    def euc_dist(self, a, b):
+        temp = 0.0 ;
+        for i in range(len(a)):
+            temp = temp + ((a[i] - b[i]) * (a[i] - b[i])) ;
+        temp = math.pow(temp, 0.5) ;
+        return temp ;
+class Horizontal_cross_validation:
+    data_name = "" ;
+    train_x_copy= [] ;
+    train_y_copy = [] ;
+    weight_list = [] ;
+    weight_acc_list = [] ;
+    final_acc_list = [] ;
+    final_weight = [] ;
+    block = 0 ;
+    base_size = 0 ;
+    
+    all_valid_x = [] ;
+    all_valid_y = [] ;
+    all_less_x = [] ;
+    all_less_y = [] ;
+    def __init__(self, data_name, train_x_copy, train_y_copy , weight_list, block, base_size_percentage): # 
+        self.data_name = data_name ;
+        self.train_x_copy = copy.deepcopy(train_x_copy) ;
+        self.train_y_copy = copy.deepcopy(train_y_copy) ;
+        self.weight_list = copy.deepcopy(weight_list) ;
+        self.block = block ;
+        self.base_size = (int)(len(self.train_x_copy) * base_size_percentage) ;
+        valid = Validation(self.train_x_copy, self.train_y_copy, block) ;
+        valid.main_control() ;
+        self.all_valid_x = copy.deepcopy(valid.train_validation_x) ;
+        self.all_valid_y = copy.deepcopy(valid.train_validation_y) ;
+        self.all_less_x = copy.deepcopy(valid.train_less_x) ;
+        self.all_less_y = copy.deepcopy(valid.train_less_y) ;
+
+    def main_control(self):
+        self.refresh() ;
+        self.cross_weight() ;
+        self.make_final_weight() ;
+    def refresh(self):
+        self.weight_acc_list = [] ;
+        self.final_acc_list = [] ;
+        self.final_weight = [] ;
+    def cross_weight(self):
+        for i in range(self.block):
+            mo_list = [] ;
+            temp_weight_acc_list = [] ;
+            valid_x = copy.deepcopy(self.all_valid_x[i]) ;
+            valid_y = copy.deepcopy(self.all_valid_y[i]) ;
+            less_x = copy.deepcopy(self.all_less_x[i]) ;
+            less_y = copy.deepcopy(self.all_less_y[i]) ;
+            less_data_length = len(less_x) ;
+                
+            mo = Method_order() ;
+            mo_list.append(mo.Angle_Based(less_x, less_y, self.data_name));
+            mo_list.append(mo.SVM_Out(less_x, less_y, self.data_name));
+            mo_list.append(mo.Rof_Out(less_x, less_y, self.data_name, self.base_size)) ;
+            mo_list.append(mo.Lof_Out(less_x, less_y, self.data_name)) ;
+            for j in range(len(self.weight_list)):
+                temp_hybrid_order = [] ;
+                temp_weight = self.weight_list[j] ;
+                temp_hybrid_order = self.make_hybrid_order(temp_weight, mo_list, less_data_length) ;
+                accuracy = self.calculate_accuracy(valid_x, valid_y, less_x, less_y, temp_hybrid_order) ;
+                temp_weight_acc_list.append(accuracy) ;
+            self.weight_acc_list.append(temp_weight_acc_list) ;
+       
+    def make_hybrid_order(self, temp_weight, method_order, data_length):
+        temp_hybrid_order = [] ;
+        for j in range(data_length):
+            temp_hybrid_order.append(0.0) ;
+        for j in range(data_length):
+            for k in range(len(method_order)):
+                temp_hybrid_order[j] = temp_hybrid_order[j] + temp_weight[k] * method_order[k].index(j) ;
+        return temp_hybrid_order ;
+    def calculate_accuracy(self, valid_x, valid_y, less_x, less_y, temp_hybrid_order):
+        valid_x = copy.deepcopy(valid_x) ;
+        valid_y = copy.deepcopy(valid_y) ;
+        less_x = copy.deepcopy(less_x) ;
+        less_y = copy.deepcopy(less_y) ;
+        temp_hybrid_order = copy.deepcopy(temp_hybrid_order) ;
+
+        for i in range(self.base_size):
+            pop_index = temp_hybrid_order.index(min(temp_hybrid_order)) ;
+            temp_hybrid_order.pop(pop_index) ;
+            less_x.pop(pop_index) ;
+            less_y.pop(pop_index) ;
+        write_svm_file (less_x , less_y , self.data_name+'-temp3.train') ;
+        cmd = '../../liblinear-incdec-2.01/train -s 2 -q -i ' + self.data_name+'-temp3.train.model ' + self.data_name+'-temp3.train' ;
+        subprocess.call (cmd.split()) ;
+        m2 = load_model (self.data_name+'-temp3.train.model') ;
+        p_label , p_acc , p_val = predict(valid_y , valid_x , m2) ;
+        return p_acc[0] ;
+    def make_final_weight(self):
+        for i in range(len(self.weight_acc_list[0])):
+            sum = 0.0 ;
+            avg = 0.0 ;
+            for j in range(len(self.weight_acc_list)):
+                sum = sum + self.weight_acc_list[j][i] ;
+            avg = sum/(float)(self.block) ;
+            self.final_acc_list.append(avg) ;
+        index = self.final_acc_list.index(max(self.final_acc_list)) ;
+        self.final_weight = self.weight_list[index] ;
+        
+    def make_final_hybrid_order(self, train_x_copy, train_y_copy, final_weight, base_size):
+        hybrid_order = [] ;
+        mo_list = [] ;
+        mo = Method_order() ;
+        mo_list.append(mo.Angle_Based(train_x_copy, train_y_copy, self.data_name));
+        mo_list.append(mo.SVM_Out(train_x_copy, train_y_copy, self.data_name));
+        mo_list.append(mo.Rof_Out(train_x_copy, train_y_copy, self.data_name, base_size)) ;
+        mo_list.append(mo.Lof_Out(train_x_copy, train_y_copy, self.data_name)) ;
+        hybrid_order = self.make_hybrid_order(final_weight, mo_list, len(train_x_copy)) ;#(self, temp_weight, method_order, data_length)
+        return hybrid_order ;
 
 
+        
+class Method_order:
+    def Angle_Based(self, train_x_copy_1, train_y_copy_1 ,data_name):
+        train_x_copy = copy.deepcopy(train_x_copy_1) ;
+        train_y_copy = copy.deepcopy(train_y_copy_1) ;
+        index_order = [] ;
+        instance_order = [] ;
+        soa = Gen() ;
+        soa.get_record_model(data_name) ;
+        gen =  General(train_x_copy, soa.record_model) ;
+        gen.main_control() ;
+        parameter_k =5 ;
+        svm_outlier_angle = Angle_Based_FastABOD(train_x_copy, gen.format_x, train_y_copy, parameter_k) ;
+        svm_outlier_angle.main_control() ;
+        for i in range(len(svm_outlier_angle.variance_cos)):
+            svm_outlier_angle.variance_cos[i] = svm_outlier_angle.variance_cos[i] + 0.0000000001*i ;
+        variance_cos = copy.deepcopy(svm_outlier_angle.variance_cos) ;
+        data_length = len(svm_outlier_angle.variance_cos) ;
+
+        for i in range(data_length):
+            temp_index = svm_outlier_angle.variance_cos.index(min(svm_outlier_angle.variance_cos)) ;
+            temp_instance = svm_outlier_angle.variance_cos.pop(temp_index) ;
+            instance_order.append(temp_instance) ;
+
+        for i in range(len(instance_order)):
+            temp_instance = instance_order[i] ;
+            index = variance_cos.index(temp_instance) ;
+            index_order.append(index) ;
+        return index_order ;
+    def SVM_Out(self, train_x_copy_1, train_y_copy_1 , data_name):
+        train_x_copy = copy.deepcopy(train_x_copy_1) ;
+        train_y_copy = copy.deepcopy(train_y_copy_1) ;
+        index_order = [];
+        instance_order = [] ;
+        svo = Gen() ;
+        svo.get_record_model(data_name) ;
+        svm_outlier = SVM_Outlier(train_x_copy, train_y_copy, svo.record_model) ;
+        svm_outlier.main_control() ;
+
+        for i in range(len(svm_outlier.compare_distance)):
+            svm_outlier.compare_distance[i] = svm_outlier.compare_distance[i] +  0.0000000001*i ;
+        compare_distance = copy.deepcopy(svm_outlier.compare_distance) ;
+        data_length = len(svm_outlier.compare_distance) ;
+
+        for i in range(data_length):
+            temp_index = svm_outlier.compare_distance.index(min(svm_outlier.compare_distance)) ;# min
+            temp_instance = svm_outlier.compare_distance.pop(temp_index) ;
+            instance_order.append(temp_instance) ;
+
+        for i in range(len(instance_order)):
+            temp_instance = instance_order[i] ;
+            index = compare_distance.index(temp_instance) ;
+            index_order.append(index) ;
+        return index_order ;
+    def Rof_Out(self, train_x_copy_1, train_y_copy_1, data_name, base_size):
+        CR = [] ;
+        train_x_copy = copy.deepcopy(train_x_copy_1) ;
+        train_y_copy = copy.deepcopy(train_y_copy_1) ;
+        index_order = [];
+        instance_order = [] ;
+
+        svr = Gen() ;
+        svr.get_record_model(data_name) ;
+
+        svm_outlier = SVM_Outlier(train_x_copy, train_y_copy, svr.record_model) ;
+        svm_outlier.main_control() ;
+
+        gen =  General(train_x_copy, svr.record_model) ;
+        gen.main_control() ;
+
+        rof = ROF_Method(gen.format_x, train_y_copy, base_size) ;
+        rof.main_control() ;
+        for i in range(len(rof.CR_List[len(rof.CR_List)-1].ROF)):
+            rof.CR_List[len(rof.CR_List)-1].ROF[i] = rof.CR_List[len(rof.CR_List)-1].ROF[i] + 0.000000001*i; # for order convenience random.uniform(0.1,0.001)
+
+        CR = copy.deepcopy(rof.CR_List[len(rof.CR_List)-1].ROF) ;
+        data_length = len(rof.CR_List[len(rof.CR_List)-1].ROF) ;
+
+        for i in range(data_length):
+            temp_instance = min(rof.CR_List[len(rof.CR_List)-1].ROF) ;
+            temp_index = rof.CR_List[len(rof.CR_List)-1].ROF.index(temp_instance) ;
+            rof.CR_List[len(rof.CR_List)-1].ClusterSize.pop(temp_index) ;
+            rof.CR_List[len(rof.CR_List)-1].label.pop(temp_index) ;
+            rof.CR_List[len(rof.CR_List)-1].ROF.pop(temp_index) ;
+            instance_order.append(temp_instance) ;
+
+        for i in range(len(instance_order)):
+            temp_instance = instance_order[i] ;
+            index = CR.index(temp_instance) ;
+            index_order.append(index) ;
+            #!!!!!!!!!!!!!!!!!!!! WRONG 
+        return index_order ;
 
 
+    def Lof_Out(self, train_x_copy_1, train_y_copy_1, data_name):
+        train_x_copy = copy.deepcopy(train_x_copy_1) ;
+        train_y_copy = copy.deepcopy(train_y_copy_1) ;
+        index_order = [];
+        instance_order = [] ;
+        lof = Gen() ;
+        lof.get_record_model(data_name) ;
+
+        LOF_point = LOF(train_x_copy, train_y_copy, lof.record_model, K, MinPts) ; 
+        LOF_point.main_control() ; 
+        for i in range(len(LOF_point.all_LOF_list)):
+            LOF_point.all_LOF_list[i] = LOF_point.all_LOF_list[i] + 0.00000001*i; # for order convenience
+        lof_list = copy.deepcopy(LOF_point.all_LOF_list) ;
+
+        for i in range(len(LOF_point.all_LOF_list)):
+            temp_index = LOF_point.all_LOF_list.index(max(LOF_point.all_LOF_list)) ;#max
+            temp_instance = LOF_point.all_LOF_list.pop(temp_index) ;
+            instance_order.append(temp_instance) ;
+        for i in range(len(instance_order)):
+            temp_instance = instance_order[i] ;
+            index = lof_list.index(temp_instance) ;
+            index_order.append(index) ;
+        return index_order ;
 
 
 def check_zero (x , y) :
@@ -1980,40 +2476,67 @@ def run (data_name , pickle_path ,select_method , data_num_size , base_size , ba
             E_out.append(p_acc[0]/base_acc_out) ;
             """
     elif (select_method == 7) :
-
+        percentage = 0.12 ; # decide unsupervised method outlier
+        restriction = 0 ; # decided from ROF nr_unmerge_list
+        """
+        svr = Gen() ;
+        svr.get_record_model(data_name) ;
+        gen =  General(train_x_copy, svr.record_model) ;
+        gen.main_control() ;
+        rof = ROF_UnLabeled_Method(gen.format_x, train_y_copy, base_size) ;
+        rof.main_control() ;
+        
+        const_restriction = (int)((len(train_x_copy)) * percentage) ;
+        for i in range(len(rof.nr_unmerge_list)):
+            temp_nr_unmerge = rof.nr_unmerge_list[i] ;
+            if(temp_nr_unmerge<const_restriction):
+                restriction = temp_nr_unmerge ;
+                break ;
+        """
         for i in range (data_num_size) :
+            
+            if(i<=-1): # i<=10 restriction>0
+                print("data_num_size", data_num_size) ;
+                svr = Gen() ;
+                svr.get_record_model(data_name) ;
+                gen =  General(train_x_copy, svr.record_model) ;
+                gen.main_control() ;
+                rof = ROF_UnLabeled_Method(gen.format_x, train_y_copy, base_size) ;
+                rof.main_control() ;
+                #testing!!!!!!!!!!!!!
+                temp_count = 0 ;
+                for k in range(len(rof.CR_List[len(rof.CR_List)-1].ROF)):
+                    temp = rof.CR_List[len(rof.CR_List)-1].ROF[k] ;
+                    if(temp != 0):
+                        #print(temp) ;
+                        temp_count = temp_count + 1 ;
+                print("original_length", len(rof.CR_List[len(rof.CR_List)-1].ROF)) ;
+                print("no_zero_length", temp_count) ;
+            else:
+                knn = KNN( train_x_copy, train_y_copy, 10, 0.8) ; # train_x_copy
+                knn.main_control() ;
             for j in range (base_size) :
-                record_model = [] ;
-                with open(data_name+'-temp2.train.model') as fp: # data_name+'-temp2.train.model
-                    for line in fp:
-                        temp_str = "" ;
-                        temp_array = [] ;
-                        temp_record_model = [] ;
-                        temp_str = str(line) ;
-                        temp_str = temp_str.rstrip('\n') ;
-                        temp_array = temp_str.split(' ') ;
+                if(i<=-1): # restriction>0
+                    ROF_min = min(rof.CR_List[len(rof.CR_List)-1].ROF) ;
+                    temp_int = rof.CR_List[len(rof.CR_List)-1].ROF.index(ROF_min) ;
+                    rof.CR_List[len(rof.CR_List)-1].ClusterSize.pop(temp_int) ;
+                    rof.CR_List[len(rof.CR_List)-1].label.pop(temp_int) ;
+                    rof.CR_List[len(rof.CR_List)-1].ROF.pop(temp_int) ;
+                    restriction = restriction - 1 ;
+                else:
+                    KNN_max = max(knn.wrong_percent_list) ;
+                    print(KNN_max) ;
+                    temp_int = knn.wrong_percent_list.index(KNN_max) ;
+                    knn.wrong_percent_list.pop(temp_int) ;
 
-                        for j in range(len(temp_array)):
-                            temp_record_model.append(temp_array[j]) ;
-                        record_model.append(temp_record_model) ;
-
-                #print("i", i) ;
-
-                svm_outlier = SVM_Outlier(train_x_copy, train_y_copy, record_model) ;
-                svm_outlier.main_control() ;
-                """
-                print("nr_class", svm_outlier.nr_class) ;
-                print("label", svm_outlier.label) ;
-                print("nr_feature", svm_outlier.nr_feature) ;
-                print("bias", svm_outlier.bias) ;
-                """
-                temp_pop_index = svm_outlier.compare_distance.index(min(svm_outlier.compare_distance)) ;# min
-
-                #print(temp_pop_index, svm_outlier.compare_distance[temp_pop_index]) ;
+                try:
+                    train_x_copy.pop(temp_int) ;
+                    train_y_copy.pop(temp_int) ;
+                except:
+                    print("length wrong_percent_list", len(knn.wrong_percent_list)) ;
+                    print("temp_int", temp_int) ;
+                    
                 
-                # temp_int = len(train_x_copy)-1 ;
-                train_x_copy.pop(temp_pop_index) ;
-                train_y_copy.pop(temp_pop_index) ;
 
             write_svm_file (train_x_copy , train_y_copy , data_name+'-temp2.train') ;
             cmd = '../../liblinear-incdec-2.01/train -s 2 -q -i ' + data_name+'-temp2.train.model ' + data_name+'-temp2.train' ;
@@ -2025,7 +2548,7 @@ def run (data_name , pickle_path ,select_method , data_num_size , base_size , ba
             E_in.append(p_acc[0]/base_acc_in) ;
             p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
             E_out.append(p_acc[0]/base_acc_out) ;
-
+            #svm.SVC.
 
 
         """
@@ -2051,6 +2574,43 @@ def run (data_name , pickle_path ,select_method , data_num_size , base_size , ba
             E_out.append(p_acc[0]/base_acc_out) ;
          """
     elif (select_method == 8) :
+        #!!!!!!!!!!!!!!! calculate a constant weight 
+        final_weight = [] ;
+        final_hybrid_order = [] ; # top outlier should be the minimum
+        weight_list = [] ;
+        weight_standard = [0.1, 0.2, 0.3, 0.4] ;
+        weight_standard_1 = [0.1, 1, 10 ,100] ;
+        for p in permutations(weight_standard):
+            weight_list.append(p) ;
+        for t in permutations(weight_standard_1):
+            weight_list.append(t) ;
+        """
+        hcv = Horizontal_cross_validation(data_name, train_x_copy, train_y_copy , weight_list, 5, 0.01) ; #(self, data_name, train_x_copy, train_y_copy , weight_list, block, base_size_percentage): # 
+        hcv.main_control() ;
+        final_weight = hcv.final_weight ;
+        final_hybrid_order = hcv.make_final_hybrid_order(train_x_copy, train_y_copy, final_weight, base_size) ; # (self, train_x_copy, train_y_copy, final_weight, base_size):
+        """
+        #!!!!!!!!!!!!!!!
+        for i in range (data_num_size) :
+            hcv = Horizontal_cross_validation(data_name, train_x_copy, train_y_copy , weight_list, 5, 0.01) ; #(self, data_name, train_x_copy, train_y_copy , weight_list, block, base_size_percentage): # 
+            hcv.main_control() ;
+            final_weight = hcv.final_weight ;
+            final_hybrid_order = hcv.make_final_hybrid_order(train_x_copy, train_y_copy, final_weight, base_size) ; # (self, train_x_copy, train_y_copy, final_weight, base_size):
+            for j in range (base_size) :
+                temp_pop_index = final_hybrid_order.index(min(final_hybrid_order)) ;
+                final_hybrid_order.pop(temp_pop_index) ;
+                train_x_copy.pop(temp_pop_index) ;
+                train_y_copy.pop(temp_pop_index) ;
+            write_svm_file (train_x_copy , train_y_copy , data_name+'-temp2.train') ;
+            cmd = '../../liblinear-incdec-2.01/train -s 2 -q -i ' + data_name+'-temp2.train.model ' + data_name+'-temp2.train' ;
+            subprocess.call (cmd.split()) ;
+            m2 = load_model (data_name+'-temp2.train.model') ;
+            # m2 = train(train_y_copy , train_x_copy , '-s 2 -q') ;
+            
+            p_label , p_acc , p_val = predict(train_y , train_x , m2) ;
+            E_in.append(p_acc[0]/base_acc_in) ;
+            p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
+            E_out.append(p_acc[0]/base_acc_out) ;
         """
         Different_LOF_point = Different_Label_LOF(train_x_copy, train_y_copy, K, MinPts) ; 
         Different_LOF_point.main_control() ; 
@@ -2198,11 +2758,6 @@ def Make_hybrid_order(base_size, weight_list, method_order, data_length):
             temp_hybrid_order.append(0.0) ;
         for j in range(data_length):
             for k in range(len(method_order)):
-                #print("j", j) ;
-                #print("temp_hybrid_order[j]", temp_hybrid_order[j]) ;
-                #print("k", k) ;
-                #print("temp_weight_list[k]",  temp_weight_list[k]) ;
-                #print("method_order[k].index(j)", method_order[k].index(j)) ;
                 temp_hybrid_order[j] = temp_hybrid_order[j] + temp_weight_list[k] * method_order[k].index(j) ;
         hybrid_order.append(temp_hybrid_order) ;
     return hybrid_order ;
@@ -2363,7 +2918,7 @@ pickle_path = output_Folder + pickle_name
 
 test_file_name = train_file_name + '.t' ;
 pure_data_name = (train_file_name.split('/'))[len(train_file_name.split('/'))-1] ;
-data_num_size = 10 ;
+data_num_size = 30 ;# originally 10
 
 print (pure_data_name) ;
 
@@ -2399,21 +2954,30 @@ E_out_0 = [1.0 for i in range(data_num_size+1)] ;
 
 # random
 
-per_wrong_label = percentage_wrong_label(pure_data_name, data_num_size,train_x , train_y) ;
+#per_wrong_label = percentage_wrong_label(pure_data_name, data_num_size,train_x , train_y) ;
 
+select_method = 8 ;
+E_in_8 , E_out_8 = run (pure_data_name , pickle_path ,select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
+print ('Horizontal_cross_validation') ;
+print (E_out_8) ;
 
-
-select_method = 6 ;
-E_in_6 , E_out_6 = run (pure_data_name , pickle_path ,select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
-print ('Hybrid') ;
-print (E_out_6) ;
-
+"""
+select_method = 7 ;
+E_in_7 , E_out_7 = run (pure_data_name , pickle_path ,select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
+print ('ROF_UnLabel_method') ;
+print (E_out_7) ;
+"""
 
 select_method = 1 ;
 E_in_1 , E_out_1= run (pure_data_name, pickle_path , select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
 print ('random') ;
 print (E_out_1) ;
 
+"""
+select_method = 6 ;
+E_in_6 , E_out_6 = run (pure_data_name , pickle_path ,select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
+print ('Hybrid') ;
+print (E_out_6) ;
 
 select_method = 2 ;
 E_in_2 , E_out_2 = run (pure_data_name , pickle_path ,select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
@@ -2434,23 +2998,17 @@ select_method = 5 ;
 E_in_5 , E_out_5 = run (pure_data_name , pickle_path ,select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
 print ('LOF') ; # Manhattan distance mean
 print (E_out_5) ;
-
-
-
-
-
 """
-select_method = 7 ;
-E_in_7 , E_out_7 = run (pure_data_name , pickle_path ,select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
-print ('SVM_Outlier') ;
-print (E_out_7) ;
 
 
-select_method = 8 ;
-E_in_8 , E_out_8, per_wrong_label = run (pure_data_name , pickle_path ,select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
-print ('Different_LOF') ;
-print (E_out_8) ;
-"""
+
+
+
+
+
+
+
+
 
 
 # ------------------------------------
@@ -2467,8 +3025,14 @@ subprocess.call (cmd.split()) ;
 """
 
 # ------------------------------------
-
-query_num = np.arange(1.00 , 0.89 , -0.01) ;
+#query_num = np.arange(1.00 , 0.89 , -0.01) ; # (1.00 , 0.89 , -0.01)
+#print("query_num", query_num) ;
+#print("length of query_num", len(query_num)) ;
+query_num = [] ;
+for i in range(100, 99-data_num_size, -1):
+    temp = i * 0.01 ;
+    query_num.append(temp) ;
+#query_num = np.arange(1.00 , 0.70 , -0.01) ; # (1.00 , 0.89 , -0.01)
 plt.subplot2grid((5,5), (0,0), colspan=5 , rowspan=4) ;
 ax = plt.gca() ; 
 ax.xaxis.set_major_locator( MultipleLocator(0.01) ) ;
@@ -2477,20 +3041,27 @@ ax.xaxis.set_major_locator( MultipleLocator(0.01) ) ;
 # ax.yaxis.set_minor_locator( MultipleLocator(0.02) ) ;
 plt.xlabel('% of Data') ;
 plt.ylabel('Acc rate') ;
-plt.xlim(1.00 , 0.90) ;
+plt.xlim(1.00 , 0.70) ; # (1.00 , 0.90)  (1.00 , 0.70)
 # plt.ylim(0.8 , 1.2) ;
 plt.grid () ;
 
-plt.title(pure_data_name + '_in_' + ('%.3f' % base_acc_in) + 'wrong_pr' +  ('%.3f' % per_wrong_label)) ;
+plt.title(pure_data_name + '_in_' + ('%.3f' % base_acc_in)) ;
+print("query_num") ;
+print(query_num) ;
+print("length of query_num", len(query_num)) ;
+print("length of E_in_0", len(E_in_0)) ;
+print("length of E_in_1", len(E_in_1)) ;
 plt.plot(query_num, E_in_0, 'k', label='total') ;
 plt.plot(query_num, E_in_1, 'bo--', label='random') ;
+"""
 plt.plot(query_num, E_in_2, 'rv--', label='SVM_Angle') ;
 plt.plot(query_num, E_in_3, 'g^--', label='SVM_Dist') ;
 plt.plot(query_num, E_in_4, 'c*--', label='ROF_NO_SVM') ;
 plt.plot(query_num, E_in_5, 'mx--', label='LOF') ; #Man mean
 plt.plot(query_num, E_in_6, 'yx--', label='hybrid') ;#Mah mean
-#plt.plot(query_num, E_in_7, 'rx--', label='SVM_Outlier') ;
-#plt.plot(query_num, E_in_8, 'kx--', label='DIF_LOF Man') ;
+"""
+#plt.plot(query_num, E_in_7, 'rx--', label='ROF_UnLabel_method') ;
+plt.plot(query_num, E_in_8, 'kx--', label='horizontal_cross') ;
 
 plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),fancybox=True, shadow=True, ncol=3) ;
 plt.savefig(pure_data_name + '_in_ROF_NO_SVM' + '.png') ;
@@ -2498,8 +3069,11 @@ plt.savefig(pure_data_name + '_in_ROF_NO_SVM' + '.png') ;
 plt.cla() ;
 
 # ----------------------------------------------------------
-
-query_num = np.arange(1.00 , 0.89 , -0.01) ;
+query_num = [] ;
+for i in range(100, 99-data_num_size, -1):
+    temp = i * 0.01 ;
+    query_num.append(temp) ;
+#query_num = np.arange(1.00 , 0.69 , -0.01) ; # (1.00 , 0.89 , -0.01)
 plt.subplot2grid((5,5), (0,0), colspan=5 , rowspan=4) ;
 ax = plt.gca() ; 
 ax.xaxis.set_major_locator( MultipleLocator(0.01) ) ;
@@ -2508,20 +3082,24 @@ ax.xaxis.set_major_locator( MultipleLocator(0.01) ) ;
 # ax.yaxis.set_minor_locator( MultipleLocator(0.02) ) ;
 plt.xlabel('% of Data') ;
 plt.ylabel('Acc rate') ;
-plt.xlim(1.00 , 0.90) ;
+plt.xlim(1.00 , 0.70) ; # (1.00 , 0.90) (1.00 , 0.70)
 # plt.ylim(0.5 , 1.5) ;
 plt.grid () ;
 
-plt.title(pure_data_name + '_out' + ('%.3f' % base_acc_out) + 'wrong_pr' +  ('%.3f' % per_wrong_label)) ;
+plt.title(pure_data_name + '_out' + ('%.3f' % base_acc_out)) ;
+
 plt.plot(query_num, E_out_0, 'k', label='total') ;
+
 plt.plot(query_num, E_out_1, 'bo--', label='random') ;
+"""
 plt.plot(query_num, E_out_2, 'rv--', label='SVM_Angle') ;
 plt.plot(query_num, E_out_3, 'g^--', label='SVM_Dist') ;
 plt.plot(query_num, E_out_4, 'c*--', label='ROF_NO_SVM') ;
 plt.plot(query_num, E_out_5, 'mx--', label='LOF') ;# Man mean
 plt.plot(query_num, E_out_6, 'yx--', label='hybrid') ; #Mah mean'
-#plt.plot(query_num, E_out_7, 'rx--', label='SVM_Outlier') ;
-#plt.plot(query_num, E_out_8, 'kx--', label='DIF_LOF Man') ;
+"""
+#plt.plot(query_num, E_out_7, 'rx--', label='ROF_UnLabel_method') ;
+plt.plot(query_num, E_out_8, 'kx--', label='horizontal_cross') ;
 
 plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),fancybox=True, shadow=True, ncol=3) ;
 plt.savefig(pure_data_name + '_out_ROF_NO_SVM' + '.png') ;
