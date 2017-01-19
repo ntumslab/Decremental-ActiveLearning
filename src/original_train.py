@@ -2638,6 +2638,91 @@ def run (data_name , pickle_path ,select_method , data_num_size , base_size , ba
             p_label , p_acc , p_val = predict(test_y , test_x , m2) ;
             E_out.append(p_acc[0]/base_acc_out) ;
             """
+	
+    elif (select_method == 9):
+
+        block = 5 ;
+        index_order = [] ;
+        instance_order = [] ;
+        for k in range (1) :
+            valid = Validation(train_x_copy, train_y_copy, block) ;
+            valid.main_control() ;
+            weight_list = [] ;
+            final_weight = [] ;
+            method_order = [] ;
+            print("block") ;
+            for i in range(block):
+                print('i', i) ;
+                valid_x = valid.train_validation_x[i] ;
+                valid_y =valid.train_validation_y[i] ;
+                less_x = valid.train_less_x[i] ;
+                less_y = valid.train_less_y[i] ;
+                base_valid_size = len(less_x) * 0.01 ;# base_valid_size decide the pop size accuracy in validation
+                base_valid_size = int(base_valid_size) + 1 ;
+                temp_weight = cross_validation( data_name , "T T" , data_num_size , base_valid_size , base_acc_in , base_acc_out , less_x , less_y , valid_x , valid_y ) ;
+                weight_list.append(temp_weight) ;
+            #print("weight_list", weight_list) ;
+            for i in range(len(weight_list[0])):
+                temp_total = 0.0 ;
+                for j in range(len(weight_list)):
+                    temp_total = temp_total + weight_list[j][i] ;
+                temp_total = temp_total/block ;
+                final_weight.append(temp_total) ;
+            
+            #final_weight = [0.18, 0.36, 0.24, 0.22] ;
+            print("final_weight", final_weight) ;
+            angle_base_order = Angle_Based(train_x_copy, train_y_copy, data_name, 0) ;
+            svm_outlier_order = SVM_Out(train_x_copy, train_y_copy, data_name, 0) ;
+            rof_order = Rof_Out(train_x_copy, train_y_copy, data_name, base_size, 0) ;
+            lof_order = Lof_Out(train_x_copy, train_y_copy, data_name, 0) ;
+            method_order.append(angle_base_order) ;
+            method_order.append(svm_outlier_order) ;
+            method_order.append(rof_order) ;
+            method_order.append(lof_order) ;
+
+            angle_base_value = Angle_Based(train_x_copy, train_y_copy, data_name, 1) ;
+            svm_outlier_value= SVM_Out(train_x_copy, train_y_copy, data_name, 1) ;
+            rof_value = Rof_Out(train_x_copy, train_y_copy, data_name, base_size, 1) ;
+            lof_value = Lof_Out(train_x_copy, train_y_copy, data_name, 1) ;
+
+            data_length = len(train_x_copy) ;
+            All_weight = [] ;
+            All_weight.append(final_weight) ;
+            temp_hybrid_order = [] ;
+            hybrid_order = [] ;
+            temp_hybrid_order = Make_hybrid_order(base_size, All_weight, method_order, data_length) ;
+            #print("length temp_hybrid_order", len(temp_hybrid_order)) ;
+            hybrid_order = copy.deepcopy(temp_hybrid_order[0]) ;
+            hy_data_length = len(hybrid_order) ;
+            copy_hybrid_order = copy.deepcopy(hybrid_order) ;
+
+			
+
+			
+            for i in range(hy_data_length):
+				temp_index = hybrid_order.index(min(hybrid_order)) ;
+				temp_instance = hybrid_order.pop(temp_index) ;
+				instance_order.append(temp_instance) ;
+
+            for i in range(len(instance_order)):
+                temp_instance = instance_order[i] ;
+                index = copy_hybrid_order.index(temp_instance) ;
+                index_order.append(index)
+            print("index_order");
+            print(index_order) ;
+            print("angle_base_value") ;
+            print(angle_base_value) ;
+            print("svm_outlier_value") ;
+            print(svm_outlier_value) ;
+            print("rof_value") ;
+            print(rof_value) ;
+            print("lof_value") ;
+            print(lof_value) ;
+            with open(pickle_path, 'w') as store:
+                pickle.dump((pure_data_name, index_order, angle_base_value, svm_outlier_value, rof_value, lof_value), store) ;
+                print("dd") ;
+
+	
     return E_in , E_out ;
 
 def cross_validation(data_name , pickle_path , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y): # use loop to put validation 
@@ -2671,10 +2756,10 @@ def cross_validation(data_name , pickle_path , data_num_size , base_size , base_
     #E_in = [noise_acc_in/base_acc_in] ;
     #E_out = [noise_acc_out/base_acc_out] ;
     data_length = len(train_x) ;
-    angle_base_order = Angle_Based(train_x_copy, train_y_copy, data_name) ;
-    svm_outlier_order = SVM_Out(train_x_copy, train_y_copy, data_name) ;
-    rof_order = Rof_Out(train_x_copy, train_y_copy, data_name, base_size) ;
-    lof_order = Lof_Out(train_x_copy, train_y_copy, data_name) ;
+    angle_base_order = Angle_Based(train_x_copy, train_y_copy, data_name, 0) ;
+    svm_outlier_order = SVM_Out(train_x_copy, train_y_copy, data_name, 0) ;
+    rof_order = Rof_Out(train_x_copy, train_y_copy, data_name, base_size, 0) ;
+    lof_order = Lof_Out(train_x_copy, train_y_copy, data_name, 0) ;
 
     method_order.append(angle_base_order) ;
     method_order.append(svm_outlier_order) ;
@@ -2697,10 +2782,10 @@ def cross_validation(data_name , pickle_path , data_num_size , base_size , base_
         train_x_pop =  copy.deepcopy(train_x) ;
         train_y_pop = copy.deepcopy(train_y) ;
         temp_hybrid_order = copy.deepcopy(hybrid_order[i]) ;
-        print("i", i) ;
-        print("hybrid_order", len(hybrid_order[i])) ;
-        print("length temp_hybrid_order", len(temp_hybrid_order)) ;
-        print("base_size", base_size) ;
+        #print("i", i) ;
+        #print("hybrid_order", len(hybrid_order[i])) ;
+        #print("length temp_hybrid_order", len(temp_hybrid_order)) ;
+        #print("base_size", base_size) ;
         for j in range(base_size): # pop points in different weight order
             pop_index = temp_hybrid_order.index(min(temp_hybrid_order)) ;
             temp_hybrid_order.pop(pop_index) ;
@@ -2717,13 +2802,13 @@ def cross_validation(data_name , pickle_path , data_num_size , base_size , base_
     answer_weight = weight_list[answer_index] ;
     compare_index = 12 ;
     compare_weight = weight_list[compare_index] ;
-    print("compare_index", compare_index) ;
-    print("compare_weight", compare_weight) ;
-    print("compare_acc", E_out[compare_index]) ;
-    print("answer_index", answer_index) ;
-    print("answer_weight", answer_weight) ;
-    print("answer_acc", E_out[answer_index]) ;
-    print("E_out", E_out) ;
+    #print("compare_index", compare_index) ;
+    #print("compare_weight", compare_weight) ;
+    #print("compare_acc", E_out[compare_index]) ;
+    #print("answer_index", answer_index) ;
+    #print("answer_weight", answer_weight) ;
+    #print("answer_acc", E_out[answer_index]) ;
+    #print("E_out", E_out) ;
     return answer_weight ;# answer_weight
 
                 
@@ -2747,8 +2832,8 @@ def Make_hybrid_order(base_size, weight_list, method_order, data_length):
     for i in range(len(weight_list)):# len(weight_list)
         temp_weight_list = [] ;
         temp_weight_list = copy.deepcopy(weight_list[i]) ;
-        print("i" , i) ;
-        print("temp_weight_list", temp_weight_list) ;
+        #print("i" , i) ;
+        #print("temp_weight_list", temp_weight_list) ;
         angle = 0.0 ;
         svm = 0.0 ;
         rof = 0.0 ;
@@ -2761,7 +2846,7 @@ def Make_hybrid_order(base_size, weight_list, method_order, data_length):
                 temp_hybrid_order[j] = temp_hybrid_order[j] + temp_weight_list[k] * method_order[k].index(j) ;
         hybrid_order.append(temp_hybrid_order) ;
     return hybrid_order ;
-def Angle_Based(train_x_copy_1, train_y_copy_1 ,data_name):
+def Angle_Based(train_x_copy_1, train_y_copy_1 , data_name, choice):
     train_x_copy = copy.deepcopy(train_x_copy_1) ;
     train_y_copy = copy.deepcopy(train_y_copy_1) ;
     index_order = [] ;
@@ -2777,6 +2862,8 @@ def Angle_Based(train_x_copy_1, train_y_copy_1 ,data_name):
         svm_outlier_angle.variance_cos[i] = svm_outlier_angle.variance_cos[i] + 0.0000000001*i ;
     variance_cos = copy.deepcopy(svm_outlier_angle.variance_cos) ;
     data_length = len(svm_outlier_angle.variance_cos) ;
+    if(choice == 1):
+        return variance_cos ;
 
     for i in range(data_length):
         temp_index = svm_outlier_angle.variance_cos.index(min(svm_outlier_angle.variance_cos)) ;
@@ -2788,7 +2875,7 @@ def Angle_Based(train_x_copy_1, train_y_copy_1 ,data_name):
         index = variance_cos.index(temp_instance) ;
         index_order.append(index) ;
     return index_order ;
-def SVM_Out(train_x_copy_1, train_y_copy_1 , data_name):
+def SVM_Out(train_x_copy_1, train_y_copy_1 , data_name, choice):
     train_x_copy = copy.deepcopy(train_x_copy_1) ;
     train_y_copy = copy.deepcopy(train_y_copy_1) ;
     index_order = [];
@@ -2802,7 +2889,10 @@ def SVM_Out(train_x_copy_1, train_y_copy_1 , data_name):
         svm_outlier.compare_distance[i] = svm_outlier.compare_distance[i] +  0.0000000001*i ;
     compare_distance = copy.deepcopy(svm_outlier.compare_distance) ;
     data_length = len(svm_outlier.compare_distance) ;
-
+	##################
+    if(choice == 1):
+        return compare_distance ;
+	##################
     for i in range(data_length):
         temp_index = svm_outlier.compare_distance.index(min(svm_outlier.compare_distance)) ;# min
         temp_instance = svm_outlier.compare_distance.pop(temp_index) ;
@@ -2813,7 +2903,7 @@ def SVM_Out(train_x_copy_1, train_y_copy_1 , data_name):
         index = compare_distance.index(temp_instance) ;
         index_order.append(index) ;
     return index_order ;
-def Rof_Out(train_x_copy_1, train_y_copy_1, data_name, base_size):
+def Rof_Out(train_x_copy_1, train_y_copy_1, data_name, base_size, choice):
     CR = [] ;
     train_x_copy = copy.deepcopy(train_x_copy_1) ;
     train_y_copy = copy.deepcopy(train_y_copy_1) ;
@@ -2837,6 +2927,9 @@ def Rof_Out(train_x_copy_1, train_y_copy_1, data_name, base_size):
     CR = copy.deepcopy(rof.CR_List[len(rof.CR_List)-1].ROF) ;
     data_length = len(rof.CR_List[len(rof.CR_List)-1].ROF) ;
 
+    if(choice == 1):
+		return CR ;
+
     for i in range(data_length):
         temp_instance = min(rof.CR_List[len(rof.CR_List)-1].ROF) ;
         temp_index = rof.CR_List[len(rof.CR_List)-1].ROF.index(temp_instance) ;
@@ -2853,7 +2946,7 @@ def Rof_Out(train_x_copy_1, train_y_copy_1, data_name, base_size):
     return index_order ;
 
 
-def Lof_Out(train_x_copy_1, train_y_copy_1, data_name):
+def Lof_Out(train_x_copy_1, train_y_copy_1, data_name, choice):
     train_x_copy = copy.deepcopy(train_x_copy_1) ;
     train_y_copy = copy.deepcopy(train_y_copy_1) ;
     index_order = [];
@@ -2866,6 +2959,9 @@ def Lof_Out(train_x_copy_1, train_y_copy_1, data_name):
     for i in range(len(LOF_point.all_LOF_list)):
         LOF_point.all_LOF_list[i] = LOF_point.all_LOF_list[i] + 0.00000001*i; # for order convenience
     lof_list = copy.deepcopy(LOF_point.all_LOF_list) ;
+
+    if(choice == 1):
+        return lof_list ;
 
     for i in range(len(LOF_point.all_LOF_list)):
         temp_index = LOF_point.all_LOF_list.index(max(LOF_point.all_LOF_list)) ;#max
@@ -2955,13 +3051,17 @@ E_out_0 = [1.0 for i in range(data_num_size+1)] ;
 # random
 
 #per_wrong_label = percentage_wrong_label(pure_data_name, data_num_size,train_x , train_y) ;
-
+select_method = 9 ;
+E_in_9 , E_out_9 = run (pure_data_name , pickle_path ,select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
+print ('Horizontal_cross_validation') ;
+print (E_out_9) ;
+"""
 select_method = 8 ;
 E_in_8 , E_out_8 = run (pure_data_name , pickle_path ,select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
 print ('Horizontal_cross_validation') ;
 print (E_out_8) ;
 
-"""
+
 select_method = 7 ;
 E_in_7 , E_out_7 = run (pure_data_name , pickle_path ,select_method , data_num_size , base_size , base_acc_in , base_acc_out , train_x , train_y , test_x , test_y) ;
 print ('ROF_UnLabel_method') ;
@@ -3061,7 +3161,7 @@ plt.plot(query_num, E_in_5, 'mx--', label='LOF') ; #Man mean
 plt.plot(query_num, E_in_6, 'yx--', label='hybrid') ;#Mah mean
 """
 #plt.plot(query_num, E_in_7, 'rx--', label='ROF_UnLabel_method') ;
-plt.plot(query_num, E_in_8, 'kx--', label='horizontal_cross') ;
+#plt.plot(query_num, E_in_8, 'kx--', label='horizontal_cross') ;
 
 plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),fancybox=True, shadow=True, ncol=3) ;
 plt.savefig(pure_data_name + '_in_ROF_NO_SVM' + '.png') ;
@@ -3099,7 +3199,7 @@ plt.plot(query_num, E_out_5, 'mx--', label='LOF') ;# Man mean
 plt.plot(query_num, E_out_6, 'yx--', label='hybrid') ; #Mah mean'
 """
 #plt.plot(query_num, E_out_7, 'rx--', label='ROF_UnLabel_method') ;
-plt.plot(query_num, E_out_8, 'kx--', label='horizontal_cross') ;
+#plt.plot(query_num, E_out_8, 'kx--', label='horizontal_cross') ;
 
 plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),fancybox=True, shadow=True, ncol=3) ;
 plt.savefig(pure_data_name + '_out_ROF_NO_SVM' + '.png') ;
